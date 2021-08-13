@@ -1,6 +1,7 @@
 use crate::file_exist;
 use anyhow::{bail, Result};
-use futures::{AsyncWriteExt, TryStreamExt};
+use asynchronous_codec::{BytesCodec, Framed};
+use futures::{SinkExt, TryStreamExt};
 use interprocess::nonblocking::local_socket::{LocalSocketListener, LocalSocketStream};
 use std::{future::Future, path::Path};
 use tokio::fs;
@@ -54,13 +55,14 @@ impl Socket<&'static str> {
     }
 
     #[inline]
-    pub(crate) async fn write(&self, message: impl AsRef<[u8]>) -> Result<()> {
+    pub(crate) async fn write(&self, message: Vec<u8>) -> Result<()> {
         if self.is_server {
             bail!("not a client");
         }
-        let mut conn = LocalSocketStream::connect(self.path).await?;
-        conn.write_all(message.as_ref()).await?;
-        conn.close().await?;
+        let conn = LocalSocketStream::connect(self.path).await?;
+        let mut framed = Framed::new(conn, BytesCodec);
+        framed.send(message.into()).await?;
+        framed.close().await?;
 
         Ok(())
     }
@@ -81,17 +83,16 @@ mod tests {
         let _ = tokio::spawn(async move {
             server
                 .listen(|mut conn| async move {
-                    let mut buf = Vec::new();
-                    let _ = conn.read_to_end(&mut buf).await?;
-                    assert_eq!(buf, b"hello, server");
-                    conn.close().await?;
+                    let mut buf = [0u8; 13];
+                    let _ = conn.read_exact(&mut buf).await?;
+                    assert_eq!(&buf, b"hello, server");
                     Ok(())
                 })
                 .await
                 .unwrap();
         });
         sleep(Duration::from_secs(2)).await;
-        client.write(b"hello, server").await?;
+        client.write(b"hello, server".to_vec()).await?;
         sleep(Duration::from_secs(2)).await;
 
         Ok(())

@@ -106,6 +106,7 @@ dependencies = [
  "acfunlivedanmaku",
  "anyhow",
  "async-graphql",
+ "asynchronous-codec",
  "bincode",
  "chrono",
  "encon",
