@@ -1,0 +1,27 @@
+[package]
+name = "acfunlivedata-backend"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+#acfunliveapi = { version = "0.1.0", git = "https://github.com/orzogc/acfunliveapi", branch = "main" }
+acfunlivedata-common = { version = "0.1.0", path = "../common" }
+ahash = { version = "0.7.4", features = ["serde"] }
+anyhow = "1.0.42"
+async-graphql = { version = "2.9.10", features = ["log", "dataloader"] }
+async-trait = "0.1.51"
+axum = "0.1.3"
+bb8 = "0.7.1"
+cached = "0.24.1"
+env_logger = "0.9.0"
+futures = "0.3.16"
+log = "0.4.14"
+once_cell = "1.8.0"
+rand = "0.8.4"
+rpassword = "5.0.1"
+rusqlite = "0.25.3"
+serde = { version = "1.0.127", features = ["derive"] }
+thiserror = "1.0.26"
+tokio = { version = "1.10.0", features = ["rt-multi-thread", "macros", "sync"] }
+#tower = "0.4.8"
+#tower-http = { version = "0.1.1", features = ["compression-gzip"] }

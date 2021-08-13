@@ -1,0 +1,99 @@
+use crate::file_exist;
+use anyhow::{bail, Result};
+use futures::{AsyncWriteExt, TryStreamExt};
+use interprocess::nonblocking::local_socket::{LocalSocketListener, LocalSocketStream};
+use std::{future::Future, path::Path};
+use tokio::fs;
+
+#[derive(Clone, Debug)]
+pub(crate) struct Socket<P> {
+    path: P,
+    is_server: bool,
+}
+
+impl<P> Socket<P> {
+    #[inline]
+    pub(crate) fn new(path: P, is_server: bool) -> Self {
+        Self { path, is_server }
+    }
+
+    #[inline]
+    pub(crate) fn is_server(&self) -> bool {
+        self.is_server
+    }
+}
+
+impl<P: AsRef<Path>> Socket<P> {
+    #[inline]
+    async fn socket_exist(&self) -> bool {
+        file_exist(&self.path).await
+    }
+
+    #[inline]
+    async fn remove_socket(&self) -> Result<()> {
+        Ok(fs::remove_file(&self.path).await?)
+    }
+}
+
+impl Socket<&'static str> {
+    pub(crate) async fn listen<F, Fut>(&self, f: F) -> Result<()>
+    where
+        F: FnMut(LocalSocketStream) -> Fut,
+        Fut: Future<Output = std::result::Result<(), std::io::Error>>,
+    {
+        if !self.is_server {
+            bail!("not a server");
+        }
+        if self.socket_exist().await {
+            self.remove_socket().await?
+        }
+        let socket = LocalSocketListener::bind(self.path).await?.incoming();
+        socket.try_for_each_concurrent(None, f).await?;
+
+        Ok(())
+    }
+
+    #[inline]
+    pub(crate) async fn write(&self, message: impl AsRef<[u8]>) -> Result<()> {
+        if self.is_server {
+            bail!("not a client");
+        }
+        let mut conn = LocalSocketStream::connect(self.path).await?;
+        conn.write_all(message.as_ref()).await?;
+        conn.close().await?;
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::message::BACKEND_SOCKET;
+    use futures::AsyncReadExt;
+    use std::time::Duration;
+    use tokio::time::sleep;
+
+    #[tokio::test]
+    async fn test_socket() -> Result<()> {
+        let server = Socket::new(BACKEND_SOCKET, true);
+        let client = Socket::new(BACKEND_SOCKET, false);
+        let _ = tokio::spawn(async move {
+            server
+                .listen(|mut conn| async move {
+                    let mut buf = Vec::new();
+                    let _ = conn.read_to_end(&mut buf).await?;
+                    assert_eq!(buf, b"hello, server");
+                    conn.close().await?;
+                    Ok(())
+                })
+                .await
+                .unwrap();
+        });
+        sleep(Duration::from_secs(2)).await;
+        client.write(b"hello, server").await?;
+        sleep(Duration::from_secs(2)).await;
+
+        Ok(())
+    }
+}
