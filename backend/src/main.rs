@@ -16,6 +16,9 @@ use rpassword::read_password_from_tty;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+const WORKER_THREAD_NUM: usize = 10;
+const MAX_BLOCKING_THREAD: usize = 2048;
+
 fn main() -> Result<()> {
     env_logger::builder()
         .filter(Some("acfunliveapi"), log::LevelFilter::Trace)
@@ -49,10 +52,10 @@ fn main() -> Result<()> {
     .layer(AddExtensionLayer::new(schema));
 
     tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(10)
+        .worker_threads(WORKER_THREAD_NUM)
         .thread_name("acfunlivedata backend worker")
         .enable_all()
-        .max_blocking_threads(2048)
+        .max_blocking_threads(MAX_BLOCKING_THREAD)
         .build()?
         .block_on(async {
             let mut config: config::LiveConfig = CommonConfig::new_or_load_config(
@@ -61,7 +64,7 @@ fn main() -> Result<()> {
             )
             .await
             .expect("failed to load config");
-            if !config.contains_uid(0) {
+            if !config.contains_super_token() {
                 let token = config::generate_token();
                 println!("super auth token:\n{}", token);
                 config.set_super_token(token);

@@ -8,6 +8,7 @@ edition = "2018"
 acfunlivedata-common = { version = "0.1.0", path = "../common" }
 ahash = { version = "0.7.4", features = ["serde"] }
 anyhow = "1.0.42"
+#argon2 = { version = "0.2.2", features = ["parallel"] }
 async-graphql = { version = "2.9.10", features = ["log", "dataloader"] }
 async-trait = "0.1.51"
 axum = "0.1.3"

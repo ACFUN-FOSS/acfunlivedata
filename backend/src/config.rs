@@ -15,6 +15,7 @@ use tokio::sync::Mutex;
 
 const CONFIG_FILE: &str = "acfunlivedata_backend.json";
 const TOKEN_LENGTH: usize = 20;
+pub const SUPER_TOKEN_UID: i64 = 0;
 
 pub static CONFIG_FILE_PATH: Lazy<PathBuf> = Lazy::new(|| {
     let mut path = DIRECTORY_PATH.clone();
@@ -48,11 +49,6 @@ pub struct Config {
 }
 
 impl Config {
-    //#[inline]
-    //pub fn livers(&self) -> &Livers {
-    //    &self.livers
-    //}
-
     #[inline]
     pub fn contains_uid(&self, liver_uid: i64) -> bool {
         self.livers.values().any(|i| *i == liver_uid)
@@ -64,19 +60,24 @@ impl Config {
     }
 
     #[inline]
+    pub fn contains_super_token(&self) -> bool {
+        self.contains_uid(SUPER_TOKEN_UID)
+    }
+
+    #[inline]
     pub fn get(&self, token: &str) -> Option<&i64> {
         self.livers.get(token)
     }
 
     #[inline]
     pub fn set_super_token(&mut self, token: String) {
-        let _ = self.livers.insert(token, 0);
+        let _ = self.livers.insert(token, SUPER_TOKEN_UID);
     }
 
     #[inline]
     pub fn is_super_token(&self, token: &str) -> bool {
         if let Some(liver_uid) = self.livers.get(token) {
-            *liver_uid == 0
+            *liver_uid == SUPER_TOKEN_UID
         } else {
             false
         }

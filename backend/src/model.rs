@@ -1,5 +1,5 @@
 use crate::{
-    config::{Token, CONFIG},
+    config::{Token, CONFIG, SUPER_TOKEN_UID},
     pool::Connection,
     sql::*,
     sqlite::connect,
@@ -67,21 +67,23 @@ macro_rules! sql_and_params {
 
 macro_rules! get_pool {
     ($token:expr, $liver_uid:expr) => {{
-        let config = CONFIG.get().expect("failed to get CONFIG").lock().await;
-        let uid = if let Some(uid) = config.get(&($token)) {
-            if *uid == 0 {
-                if let Some(liver_uid) = &($liver_uid) {
-                    *liver_uid
+        let uid = {
+            let config = CONFIG.get().expect("failed to get CONFIG").lock().await;
+            if let Some(uid) = config.get(&($token)) {
+                if *uid == SUPER_TOKEN_UID {
+                    if let Some(liver_uid) = &($liver_uid) {
+                        *liver_uid
+                    } else {
+                        bail!("super auth token need liver_uid");
+                    }
+                } else if ($liver_uid).is_some() {
+                    bail!("normal token don't need liver_uid");
                 } else {
-                    bail!("super auth token need liver_uid");
+                    *uid
                 }
-            } else if ($liver_uid).is_some() {
-                bail!("normal token don't need liver_uid");
             } else {
-                *uid
+                bail!("invalid token");
             }
-        } else {
-            bail!("invalid token");
         };
         connect(liver_db_path(uid)).await?
     }};
@@ -137,7 +139,7 @@ impl QueryRoot {
     ) -> Result<i64> {
         let config = CONFIG.get().expect("failed to get CONFIG").lock().await;
         if let Some(liver_uid) = config.get(&token) {
-            if *liver_uid == 0 {
+            if *liver_uid == SUPER_TOKEN_UID {
                 bail!("this is a super auth token, liver uid doesn't exist");
             } else {
                 Ok(*liver_uid)

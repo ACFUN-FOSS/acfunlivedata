@@ -10,6 +10,9 @@ use anyhow::{bail, Result};
 use rpassword::read_password_from_tty;
 use tokio::sync::mpsc;
 
+const WORKER_THREAD_NUM: usize = 10;
+const MAX_BLOCKING_THREAD: usize = 2048;
+
 fn main() -> Result<()> {
     env_logger::builder()
         .filter(Some("acfunliveapi"), log::LevelFilter::Trace)
@@ -33,10 +36,10 @@ fn main() -> Result<()> {
     live::GIFT_TX.set(gift_tx).expect("failed to set GIFT_TX");
 
     tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(10)
+        .worker_threads(WORKER_THREAD_NUM)
         .thread_name("acfunlivedata worker")
         .enable_all()
-        .max_blocking_threads(2048)
+        .max_blocking_threads(MAX_BLOCKING_THREAD)
         .build()?
         .block_on(async {
             let config: config::LiveConfig = CommonConfig::new_or_load_config(
