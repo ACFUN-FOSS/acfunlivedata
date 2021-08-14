@@ -1,11 +1,11 @@
 use crate::socket::Socket;
 use anyhow::Result;
-use asynchronous_codec::{BytesCodec, Framed};
+use asynchronous_codec::{Framed, LengthCodec};
 use encon::Password;
 use futures::StreamExt;
 use once_cell::sync::Lazy;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{future::Future, io, marker::PhantomData, ops::Deref, time::Duration};
+use std::{future::Future, io, marker::PhantomData, time::Duration};
 use tokio::time;
 
 pub const DATA_CENTER_SOCKET: &str = "/tmp/acfunlivedata.sock";
@@ -89,22 +89,18 @@ where
     {
         self.socket
             .listen(|conn| async move {
-                let mut framed = Framed::new(conn, BytesCodec);
+                let mut framed = Framed::new(conn, LengthCodec);
                 let bytes = match framed.next().await.transpose()? {
                     Some(b) => b,
                     None => return Ok(()),
                 };
-                let msg: M = match bincode::deserialize(
+                let msg: M = bincode::deserialize(
                     &self
                         .password
-                        .decrypt(bytes.deref())
+                        .decrypt(bytes.as_ref())
                         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?,
-                ) {
-                    Ok(msg) => msg,
-                    Err(e) => {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, e));
-                    }
-                };
+                )
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
                 f(msg)
                     .await
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;

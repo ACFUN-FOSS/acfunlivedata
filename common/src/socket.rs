@@ -1,6 +1,6 @@
 use crate::file_exist;
 use anyhow::{bail, Result};
-use asynchronous_codec::{BytesCodec, Framed};
+use asynchronous_codec::{Framed, LengthCodec};
 use futures::{SinkExt, TryStreamExt};
 use interprocess::nonblocking::local_socket::{LocalSocketListener, LocalSocketStream};
 use std::{future::Future, path::Path};
@@ -60,7 +60,7 @@ impl Socket<&'static str> {
             bail!("not a client");
         }
         let conn = LocalSocketStream::connect(self.path).await?;
-        let mut framed = Framed::new(conn, BytesCodec);
+        let mut framed = Framed::new(conn, LengthCodec);
         framed.send(message.into()).await?;
         framed.close().await?;
 
@@ -72,7 +72,7 @@ impl Socket<&'static str> {
 mod tests {
     use super::*;
     use crate::message::BACKEND_SOCKET;
-    use futures::AsyncReadExt;
+    use futures::StreamExt;
     use std::time::Duration;
     use tokio::time::sleep;
 
@@ -82,10 +82,10 @@ mod tests {
         let client = Socket::new(BACKEND_SOCKET, false);
         let _ = tokio::spawn(async move {
             server
-                .listen(|mut conn| async move {
-                    let mut buf = [0u8; 13];
-                    let _ = conn.read_exact(&mut buf).await?;
-                    assert_eq!(&buf, b"hello, server");
+                .listen(|conn| async move {
+                    let mut framed = Framed::new(conn, LengthCodec);
+                    let msg = framed.next().await.transpose()?.unwrap();
+                    assert_eq!(msg.as_ref(), b"hello, server");
                     Ok(())
                 })
                 .await
