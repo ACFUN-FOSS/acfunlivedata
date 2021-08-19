@@ -18,13 +18,13 @@ use acfunlivedanmaku::{
 use async_graphql::SimpleObject;
 use highway::HighwayHasher;
 use serde::{Deserialize, Serialize};
-use std::hash::{Hash, Hasher};
+use std::{
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
 
 pub type Manager = bool;
-pub type LiveID = String;
-pub type FansCount = Option<i32>;
-pub type MedalName = Option<String>;
-pub type MedalCount = Option<i32>;
+pub type LiveId = Arc<String>;
 
 #[inline]
 fn unix_time() -> i64 {
@@ -48,7 +48,7 @@ fn manager(identity: Option<ZtLiveUserIdentity>) -> Option<bool> {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct LiveInfo {
-    pub live_id: String,
+    pub live_id: LiveId,
     pub liver_uid: i64,
     pub liver_info: Option<LiverInfo>,
     pub stream_name: String,
@@ -68,7 +68,7 @@ impl LiveInfo {
     #[inline]
     pub fn new(liver_uid: i64, data: ApiLiveData) -> Self {
         Self {
-            live_id: data.live_id,
+            live_id: Arc::new(data.live_id),
             liver_uid,
             liver_info: None,
             stream_name: data.stream_name,
@@ -108,14 +108,14 @@ impl From<ApiLiveType> for LiveType {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct Title {
-    pub live_id: String,
+    pub live_id: LiveId,
     pub save_time: i64,
     pub title: Option<String>,
 }
 
 impl Title {
     #[inline]
-    pub fn new(live_id: String, title: Option<String>) -> Self {
+    pub fn new(live_id: LiveId, title: Option<String>) -> Self {
         Self {
             live_id,
             save_time: unix_time(),
@@ -126,7 +126,7 @@ impl Title {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct LiverInfo {
-    pub live_id: String,
+    pub live_id: LiveId,
     pub save_time: i64,
     pub liver_uid: i64,
     pub nickname: String,
@@ -175,7 +175,7 @@ impl LiverInfo {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct Summary {
-    pub live_id: String,
+    pub live_id: LiveId,
     pub save_time: i64,
     pub duration: i64,
     pub like_count: String,
@@ -186,7 +186,7 @@ pub struct Summary {
 
 impl Summary {
     #[inline]
-    pub fn new(live_id: String, summary: ApiSummary) -> Self {
+    pub fn new(live_id: LiveId, summary: ApiSummary) -> Self {
         Self {
             live_id,
             save_time: unix_time(),
@@ -201,7 +201,7 @@ impl Summary {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct Live {
-    pub live_id: String,
+    pub live_id: LiveId,
     pub liver_uid: i64,
     pub nickname: String,
     pub stream_name: String,
@@ -220,7 +220,7 @@ impl Live {
     #[inline]
     pub fn new(liver_uid: i64, data: &ApiLiveData, info: &ApiUserInfo) -> Self {
         Self {
-            live_id: data.live_id.clone(),
+            live_id: Arc::new(data.live_id.clone()),
             liver_uid,
             nickname: info.name.clone(),
             stream_name: data.stream_name.clone(),
@@ -344,7 +344,7 @@ impl From<ZtLiveUserInfo> for UserInfo {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct Comment {
-    pub live_id: String,
+    pub live_id: LiveId,
     pub send_time: i64,
     pub user_info: Option<UserInfo>,
     pub content: String,
@@ -352,7 +352,7 @@ pub struct Comment {
 
 impl Comment {
     #[inline]
-    pub fn new(live_id: String, comment: CommonActionSignalComment) -> Self {
+    pub fn new(live_id: LiveId, comment: CommonActionSignalComment) -> Self {
         Self {
             live_id,
             send_time: comment.send_time_ms,
@@ -364,14 +364,14 @@ impl Comment {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct Follow {
-    pub live_id: String,
+    pub live_id: LiveId,
     pub send_time: i64,
     pub user_info: Option<UserInfo>,
 }
 
 impl Follow {
     #[inline]
-    pub fn new(live_id: String, follow: CommonActionSignalUserFollowAuthor) -> Self {
+    pub fn new(live_id: LiveId, follow: CommonActionSignalUserFollowAuthor) -> Self {
         Self {
             live_id,
             send_time: follow.send_time_ms,
@@ -382,11 +382,10 @@ impl Follow {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct Gift {
-    pub live_id: String,
+    pub live_id: LiveId,
     pub send_time: i64,
     pub user_info: Option<UserInfo>,
     pub gift_id: i64,
-    pub gift_info: Option<GiftInfo>,
     pub count: i32,
     pub combo: i32,
     pub value: i64,
@@ -398,13 +397,12 @@ pub struct Gift {
 
 impl Gift {
     #[inline]
-    pub fn new(live_id: String, gift: CommonActionSignalGift) -> Self {
+    pub fn new(live_id: LiveId, gift: CommonActionSignalGift) -> Self {
         Self {
             live_id,
             send_time: gift.send_time_ms,
             user_info: gift.user.map(Into::into),
             gift_id: gift.gift_id,
-            gift_info: None,
             count: gift.count,
             combo: gift.combo,
             value: gift.value,
@@ -434,7 +432,7 @@ impl From<ApiAcFunUserInfo> for AcFunUserInfo {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct JoinClub {
-    pub live_id: String,
+    pub live_id: LiveId,
     pub join_time: i64,
     pub fans_info: Option<AcFunUserInfo>,
     pub uper_info: Option<AcFunUserInfo>,
@@ -442,7 +440,7 @@ pub struct JoinClub {
 
 impl JoinClub {
     #[inline]
-    pub fn new(live_id: String, join_club: AcfunActionSignalJoinClub) -> Self {
+    pub fn new(live_id: LiveId, join_club: AcfunActionSignalJoinClub) -> Self {
         Self {
             live_id,
             join_time: join_club.join_time_ms,
@@ -454,14 +452,14 @@ impl JoinClub {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct WatchingCount {
-    pub live_id: String,
+    pub live_id: LiveId,
     pub save_time: i64,
     pub watching_count: Option<i32>,
 }
 
 impl WatchingCount {
     #[inline]
-    pub fn new(live_id: String, watching_count: Option<i32>) -> Self {
+    pub fn new(live_id: LiveId, watching_count: Option<i32>) -> Self {
         Self {
             live_id,
             save_time: unix_time(),
@@ -473,7 +471,7 @@ impl WatchingCount {
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct Redpack {
     pub redpack_id: String,
-    pub live_id: String,
+    pub live_id: LiveId,
     pub save_time: i64,
     pub sender_info: Option<UserInfo>,
     pub amount: i64,
@@ -485,7 +483,7 @@ pub struct Redpack {
 
 impl Redpack {
     #[inline]
-    pub fn new(live_id: String, redpack: ApiRedpack) -> Self {
+    pub fn new(live_id: LiveId, redpack: ApiRedpack) -> Self {
         Self {
             redpack_id: redpack.red_pack_id,
             live_id,
@@ -521,7 +519,7 @@ impl From<CommonStateSignalChatCall> for ChatCall {
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct ChatReady {
     pub chat_id: String,
-    pub live_id: String,
+    pub live_id: LiveId,
     pub save_time: i64,
     pub guest_info: Option<UserInfo>,
     pub media_type: i32,
@@ -529,7 +527,7 @@ pub struct ChatReady {
 
 impl ChatReady {
     #[inline]
-    pub fn new(live_id: String, ready: CommonStateSignalChatReady) -> Self {
+    pub fn new(live_id: LiveId, ready: CommonStateSignalChatReady) -> Self {
         Self {
             chat_id: ready.chat_id,
             live_id,
@@ -543,14 +541,14 @@ impl ChatReady {
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct ChatEnd {
     pub chat_id: String,
-    pub live_id: String,
+    pub live_id: LiveId,
     pub save_time: i64,
     pub end_type: i32,
 }
 
 impl ChatEnd {
     #[inline]
-    pub fn new(live_id: String, end: CommonStateSignalChatEnd) -> Self {
+    pub fn new(live_id: LiveId, end: CommonStateSignalChatEnd) -> Self {
         Self {
             chat_id: end.chat_id,
             live_id,
@@ -581,13 +579,13 @@ impl From<ApiAuthorChatPlayerInfo> for AuthorChatPlayerInfo {
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct AuthorChatCall {
     pub author_chat_id: String,
-    pub live_id: String,
+    pub live_id: LiveId,
     pub inviter_info: Option<AuthorChatPlayerInfo>,
     pub call_time: i64,
 }
 
 impl AuthorChatCall {
-    pub fn new(live_id: String, call: CommonStateSignalAuthorChatCall) -> Self {
+    pub fn new(live_id: LiveId, call: CommonStateSignalAuthorChatCall) -> Self {
         Self {
             author_chat_id: call.author_chat_id,
             live_id,
@@ -600,14 +598,14 @@ impl AuthorChatCall {
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct AuthorChatReady {
     pub author_chat_id: String,
-    pub live_id: String,
+    pub live_id: LiveId,
     pub save_time: i64,
     pub inviter_info: Option<AuthorChatPlayerInfo>,
     pub invitee_info: Option<AuthorChatPlayerInfo>,
 }
 
 impl AuthorChatReady {
-    pub fn new(live_id: String, ready: CommonStateSignalAuthorChatReady) -> Self {
+    pub fn new(live_id: LiveId, ready: CommonStateSignalAuthorChatReady) -> Self {
         Self {
             author_chat_id: ready.author_chat_id,
             live_id,
@@ -621,7 +619,7 @@ impl AuthorChatReady {
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct AuthorChatEnd {
     pub author_chat_id: String,
-    pub live_id: String,
+    pub live_id: LiveId,
     pub save_time: i64,
     pub end_type: i32,
     pub end_live_id: String,
@@ -629,7 +627,7 @@ pub struct AuthorChatEnd {
 
 impl AuthorChatEnd {
     #[inline]
-    pub fn new(live_id: String, end: CommonStateSignalAuthorChatEnd) -> Self {
+    pub fn new(live_id: LiveId, end: CommonStateSignalAuthorChatEnd) -> Self {
         Self {
             author_chat_id: end.author_chat_id,
             live_id,
@@ -643,14 +641,14 @@ impl AuthorChatEnd {
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct AuthorChatChangeSoundConfig {
     pub author_chat_id: String,
-    pub live_id: String,
+    pub live_id: LiveId,
     pub save_time: i64,
     pub sound_config_change_type: i32,
 }
 
 impl AuthorChatChangeSoundConfig {
     #[inline]
-    pub fn new(live_id: String, config: CommonStateSignalAuthorChatChangeSoundConfig) -> Self {
+    pub fn new(live_id: LiveId, config: CommonStateSignalAuthorChatChangeSoundConfig) -> Self {
         Self {
             author_chat_id: config.author_chat_id,
             live_id,
@@ -662,14 +660,14 @@ impl AuthorChatChangeSoundConfig {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
 pub struct ViolationAlert {
-    pub live_id: String,
+    pub live_id: LiveId,
     pub save_time: i64,
     pub violation_content: String,
 }
 
 impl ViolationAlert {
     #[inline]
-    pub fn new(live_id: String, alert: CommonNotifySignalViolationAlert) -> Self {
+    pub fn new(live_id: LiveId, alert: CommonNotifySignalViolationAlert) -> Self {
         Self {
             live_id,
             save_time: unix_time(),

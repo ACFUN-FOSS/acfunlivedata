@@ -6,7 +6,7 @@ use acfunlivedata_common::{
 use ahash::AHashSet;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const CONFIG_FILE: &str = "acfunlivedata.json";
 
@@ -17,7 +17,7 @@ pub static CONFIG_FILE_PATH: Lazy<PathBuf> = Lazy::new(|| {
 });
 
 pub type Livers = AHashSet<i64>;
-pub type LiveConfig = CommonConfig<Config, PathBuf>;
+pub type LiveConfig = CommonConfig<Config, &'static Path>;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Config {

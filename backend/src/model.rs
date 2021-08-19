@@ -13,7 +13,7 @@ use async_graphql::{
 };
 use cached::proc_macro::cached;
 use rusqlite::ToSql;
-use std::iter;
+use std::{iter, sync::Arc};
 
 #[derive(Clone, Copy, Debug)]
 pub struct QueryRoot;
@@ -91,6 +91,7 @@ macro_rules! get_pool {
 
 #[Object]
 impl QueryRoot {
+    #[graphql(visible = false)]
     async fn add_liver(
         &self,
         #[graphql(validator(and(
@@ -110,6 +111,7 @@ impl QueryRoot {
         Ok(token)
     }
 
+    #[graphql(visible = false)]
     async fn delete_liver(
         &self,
         #[graphql(validator(and(
@@ -149,6 +151,7 @@ impl QueryRoot {
         }
     }
 
+    #[graphql(visible = false)]
     async fn live(
         &self,
         #[graphql(validator(and(
@@ -195,7 +198,7 @@ impl QueryRoot {
                         None => None,
                     };
                     Ok(Live {
-                        live_id: r.get(0)?,
+                        live_id: Arc::new(r.get(0)?),
                         liver_uid: r.get(1)?,
                         nickname: r.get(2)?,
                         stream_name: r.get(3)?,
@@ -226,7 +229,7 @@ impl QueryRoot {
         token: String,
         #[graphql(validator(and(ListMinLength(length = "1"), IntGreaterThan(value = "0"))))]
         gift_id: Option<Vec<i64>>,
-        all: Option<bool>,
+        #[graphql(visible = false)] all_history: Option<bool>,
     ) -> Result<Vec<GiftInfo>> {
         {
             let config = CONFIG.get().expect("failed to get CONFIG").lock().await;
@@ -240,7 +243,7 @@ impl QueryRoot {
             v.dedup();
             v
         });
-        futures::executor::block_on(cache_gift_info_vec(gift_id, all))
+        cache_gift_info_vec(gift_id, all_history).await
     }
 
     async fn live_info(
@@ -254,7 +257,7 @@ impl QueryRoot {
         live_id: Option<Vec<String>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] liver_uid: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<LiveInfo>> {
         let pool = get_pool!(token, liver_uid);
 
@@ -280,7 +283,7 @@ impl QueryRoot {
                         }),
                         None => None,
                     };
-                    let live_id: String = r.get(0)?;
+                    let live_id: Arc<String> = Arc::new(r.get(0)?);
                     let mut where_live_id = WHERE.to_string();
                     where_live_id.push_str(LIVE_ID);
                     where_live_id.push_str(SEMICOLON);
@@ -333,7 +336,7 @@ impl QueryRoot {
         live_id: Option<Vec<String>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] liver_uid: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<Title>> {
         let pool = get_pool!(token, liver_uid);
         tokio::task::spawn_blocking(move || {
@@ -362,7 +365,7 @@ impl QueryRoot {
         live_id: Option<Vec<String>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] liver_uid: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<LiverInfo>> {
         let pool = get_pool!(token, liver_uid);
         tokio::task::spawn_blocking(move || {
@@ -391,7 +394,7 @@ impl QueryRoot {
         live_id: Option<Vec<String>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] liver_uid: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<Summary>> {
         let pool = get_pool!(token, liver_uid);
         tokio::task::spawn_blocking(move || {
@@ -423,7 +426,7 @@ impl QueryRoot {
         user_id: Option<Vec<i64>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] liver_uid: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<Comment>> {
         let pool = get_pool!(token, liver_uid);
 
@@ -460,7 +463,7 @@ impl QueryRoot {
                         None => None,
                     };
                     Ok(Comment {
-                        live_id: r.get(0)?,
+                        live_id: Arc::new(r.get(0)?),
                         send_time: r.get(1)?,
                         user_info,
                         content: r.get(9)?,
@@ -484,7 +487,7 @@ impl QueryRoot {
         live_id: Option<Vec<String>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] liver_uid: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<Follow>> {
         let pool = get_pool!(token, liver_uid);
 
@@ -520,7 +523,7 @@ impl QueryRoot {
                         None => None,
                     };
                     Ok(Follow {
-                        live_id: r.get(0)?,
+                        live_id: Arc::new(r.get(0)?),
                         send_time: r.get(1)?,
                         user_info,
                     })
@@ -548,7 +551,7 @@ impl QueryRoot {
         gift_id: Option<Vec<i64>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] liver_uid: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<Gift>> {
         let pool = get_pool!(token, liver_uid);
 
@@ -565,7 +568,7 @@ impl QueryRoot {
 
             let conn = futures::executor::block_on(pool.get())?;
             let mut stmt = conn.prepare_cached(&sql)?;
-            let mut gifts = stmt
+            let gifts = stmt
                 .query_map(params.as_slice(), |r| {
                     let medal = match r.get::<_, Option<i64>>(5)? {
                         Some(uper_uid) => Some(MedalInfo {
@@ -586,11 +589,10 @@ impl QueryRoot {
                         None => None,
                     };
                     Ok(Gift {
-                        live_id: r.get(0)?,
+                        live_id: Arc::new(r.get(0)?),
                         send_time: r.get(1)?,
                         user_info,
                         gift_id: r.get(9)?,
-                        gift_info: None,
                         count: r.get(10)?,
                         combo: r.get(11)?,
                         value: r.get(12)?,
@@ -601,6 +603,7 @@ impl QueryRoot {
                     })
                 })?
                 .collect::<rusqlite::Result<Vec<Gift>>>()?;
+            /*
             let mut gift_id_list = gifts.iter().map(|g| g.gift_id).collect::<Vec<_>>();
             gift_id_list.sort_unstable();
             gift_id_list.dedup();
@@ -610,6 +613,7 @@ impl QueryRoot {
                     gift.gift_info = Some(info.clone());
                 }
             }
+            */
 
             Ok(gifts)
         })
@@ -627,7 +631,7 @@ impl QueryRoot {
         live_id: Option<Vec<String>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] liver_uid: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<JoinClub>> {
         let pool = get_pool!(token, liver_uid);
 
@@ -659,7 +663,7 @@ impl QueryRoot {
                         None => None,
                     };
                     Ok(JoinClub {
-                        live_id: r.get(0)?,
+                        live_id: Arc::new(r.get(0)?),
                         join_time: r.get(1)?,
                         fans_info,
                         uper_info,
@@ -683,7 +687,7 @@ impl QueryRoot {
         live_id: Option<Vec<String>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] liver_uid: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<WatchingCount>> {
         let pool = get_pool!(token, liver_uid);
 
@@ -701,7 +705,7 @@ impl QueryRoot {
             let list = stmt
                 .query_map(params.as_slice(), |r| {
                     Ok(WatchingCount {
-                        live_id: r.get(0)?,
+                        live_id: Arc::new(r.get(0)?),
                         save_time: r.get(1)?,
                         watching_count: r.get(2)?,
                     })
@@ -717,7 +721,7 @@ impl QueryRoot {
 #[cached(size = 100, time = 1800, result = true)]
 async fn cache_gift_info_vec(
     gift_id: Option<Vec<i64>>,
-    all: Option<bool>,
+    all_history: Option<bool>,
 ) -> Result<Vec<GiftInfo>> {
     let pool = connect(GIFT_DATABASE.clone()).await?;
 
@@ -733,7 +737,7 @@ async fn cache_gift_info_vec(
         let conn = futures::executor::block_on(pool.get())?;
         let mut list = gift_info(&conn, &sql, &params)?;
 
-        if !all.unwrap_or(false) {
+        if !all_history.unwrap_or(false) {
             list = list
                 .into_iter()
                 .fold(AHashMap::<i64, GiftInfo>::new(), |mut m, g| {
@@ -762,6 +766,7 @@ async fn cache_gift_info_vec(
     .await?
 }
 
+/*
 #[cached(size = 100, time = 1800, result = true)]
 async fn cache_gift_info_map(gift_id: Vec<i64>) -> Result<AHashMap<i64, GiftInfo>> {
     let gift_id = if gift_id.is_empty() {
@@ -802,6 +807,7 @@ async fn cache_gift_info_map(gift_id: Vec<i64>) -> Result<AHashMap<i64, GiftInfo
     })
     .await?
 }
+*/
 
 #[inline]
 fn gift_info(
@@ -844,7 +850,7 @@ fn title(conn: &Connection, sql: &str, params: &[&dyn ToSql]) -> rusqlite::Resul
     let titles = stmt
         .query_map(params, |r| {
             Ok(Title {
-                live_id: r.get(0)?,
+                live_id: Arc::new(r.get(0)?),
                 save_time: r.get(1)?,
                 title: r.get(2)?,
             })
@@ -864,7 +870,7 @@ fn liver_info(
     let list = stmt
         .query_map(params, |r| {
             Ok(LiverInfo {
-                live_id: r.get(0)?,
+                live_id: Arc::new(r.get(0)?),
                 save_time: r.get(1)?,
                 liver_uid: r.get(2)?,
                 nickname: r.get(3)?,
@@ -893,7 +899,7 @@ fn summary(conn: &Connection, sql: &str, params: &[&dyn ToSql]) -> rusqlite::Res
     let summaries = stmt
         .query_map(params, |r| {
             Ok(Summary {
-                live_id: r.get(0)?,
+                live_id: Arc::new(r.get(0)?),
                 save_time: r.get(1)?,
                 duration: r.get(2)?,
                 like_count: r.get(3)?,

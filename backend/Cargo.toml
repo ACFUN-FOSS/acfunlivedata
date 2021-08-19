@@ -7,7 +7,7 @@ edition = "2018"
 #acfunliveapi = { version = "0.1.0", git = "https://github.com/orzogc/acfunliveapi", branch = "main" }
 acfunlivedata-common = { version = "0.1.0", path = "../common" }
 ahash = { version = "0.7.4", features = ["serde"] }
-anyhow = "1.0.42"
+anyhow = "1.0.43"
 #argon2 = { version = "0.2.2", features = ["parallel"] }
 async-graphql = { version = "2.9.10", features = ["log", "dataloader"] }
 async-trait = "0.1.51"
@@ -24,5 +24,5 @@ rusqlite = "0.25.3"
 serde = { version = "1.0.127", features = ["derive"] }
 thiserror = "1.0.26"
 tokio = { version = "1.10.0", features = ["rt-multi-thread", "macros", "sync"] }
-#tower = "0.4.8"
-#tower-http = { version = "0.1.1", features = ["compression-gzip"] }
+tower = { version = "0.4.8", features = ["timeout", "limit"] }
+tower-http = { version = "0.1.1", features = ["compression-gzip"] }

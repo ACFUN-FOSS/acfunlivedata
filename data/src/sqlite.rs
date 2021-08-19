@@ -9,7 +9,7 @@ use ahash::AHashSet;
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use rusqlite::{named_params, Connection, OpenFlags, OptionalExtension};
-use std::{ops::Deref, path::Path};
+use std::{path::Path, sync::Arc};
 use tokio::sync::mpsc;
 
 static OPEN_FLAGS: Lazy<OpenFlags> = Lazy::new(|| {
@@ -20,8 +20,8 @@ static OPEN_FLAGS: Lazy<OpenFlags> = Lazy::new(|| {
 
 #[inline]
 pub async fn create_db_dir() -> Result<()> {
-    create_dir(DATABASE_DIRECTORY.deref()).await?;
-    create_dir(LIVERS_DIRECTORY.deref()).await
+    create_dir(&*DATABASE_DIRECTORY).await?;
+    create_dir(&*LIVERS_DIRECTORY).await
 }
 
 #[inline]
@@ -30,7 +30,7 @@ fn connect<P: AsRef<Path>>(path: P) -> Result<Connection> {
 }
 
 pub fn all_lives(mut all_lives_rx: mpsc::UnboundedReceiver<AllLiveData>) {
-    let conn = connect(ACFUN_LIVE_DATABASE.deref())
+    let conn = connect(&*ACFUN_LIVE_DATABASE)
         .unwrap_or_else(|e| panic!("failed to connect {}: {}", ACFUN_LIVE_DATABASE_NAME, e));
     conn.execute_batch(CREATE_LIVE)
         .expect("failed to create live table");
@@ -87,7 +87,7 @@ pub fn all_lives(mut all_lives_rx: mpsc::UnboundedReceiver<AllLiveData>) {
 }
 
 pub fn gift_info(mut gift_rx: mpsc::UnboundedReceiver<Vec<ApiGift>>) {
-    let conn = connect(GIFT_DATABASE.deref())
+    let conn = connect(&*GIFT_DATABASE)
         .unwrap_or_else(|e| panic!("failed to connect {}: {}", GIFT_DATABASE_NAME, e));
     conn.execute_batch(CREATE_GIFT_INFO)
         .expect("failed to create gift_info table");
@@ -126,7 +126,7 @@ pub fn gift_info(mut gift_rx: mpsc::UnboundedReceiver<Vec<ApiGift>>) {
     unreachable!("failed to receive Vec<Gift>");
 }
 
-pub fn save_data(mut data_rx: mpsc::UnboundedReceiver<LiveData>, live_id: String, liver_uid: i64) {
+pub fn save_data(mut data_rx: mpsc::UnboundedReceiver<LiveData>, live_id: LiveId, liver_uid: i64) {
     let path = liver_db_path(liver_uid);
     let conn = match Conn::new(&path, live_id.clone(), liver_uid) {
         Ok(conn) => conn,
@@ -244,14 +244,14 @@ macro_rules! cached_stmt {
 
 #[derive(Debug)]
 struct Conn {
-    live_id: String,
+    live_id: Arc<String>,
     liver_uid: i64,
     conn: Connection,
 }
 
 impl Conn {
     #[inline]
-    fn new<P: AsRef<Path>>(path: P, live_id: String, liver_uid: i64) -> Result<Self> {
+    fn new<P: AsRef<Path>>(path: P, live_id: Arc<String>, liver_uid: i64) -> Result<Self> {
         Ok(Self {
             live_id,
             liver_uid,
@@ -380,7 +380,7 @@ impl Conn {
 
     fn update_count(
         &self,
-        live_id: String,
+        live_id: LiveId,
         fans_count: Option<i32>,
         medal_name: Option<String>,
         medal_count: Option<i32>,

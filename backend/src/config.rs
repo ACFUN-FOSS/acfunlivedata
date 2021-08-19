@@ -10,7 +10,10 @@ use async_graphql::SimpleObject;
 use once_cell::sync::{Lazy, OnceCell};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use tokio::sync::Mutex;
 
 const CONFIG_FILE: &str = "acfunlivedata_backend.json";
@@ -26,7 +29,7 @@ pub static CONFIG_FILE_PATH: Lazy<PathBuf> = Lazy::new(|| {
 pub static CONFIG: OnceCell<Arc<Mutex<LiveConfig>>> = OnceCell::new();
 
 pub type Livers = AHashMap<String, i64>;
-pub type LiveConfig = CommonConfig<Config, PathBuf>;
+pub type LiveConfig = CommonConfig<Config, &'static Path>;
 
 #[inline]
 pub fn generate_token() -> String {

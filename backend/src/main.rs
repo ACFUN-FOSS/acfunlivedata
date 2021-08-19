@@ -13,11 +13,15 @@ use acfunlivedata_common::{
 use anyhow::{bail, Result};
 use axum::{prelude::*, AddExtensionLayer};
 use rpassword::read_password_from_tty;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
+use tower::{limit::concurrency::ConcurrencyLimitLayer, timeout::TimeoutLayer};
+use tower_http::compression::CompressionLayer;
 
 const WORKER_THREAD_NUM: usize = 10;
 const MAX_BLOCKING_THREAD: usize = 2048;
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
+const CONCURRENCY_LIMIT: usize = 50;
 
 fn main() -> Result<()> {
     env_logger::builder()
@@ -49,7 +53,10 @@ fn main() -> Result<()> {
         "/",
         get(graphql::graphql_playground).post(graphql::graphql_handler),
     )
-    .layer(AddExtensionLayer::new(schema));
+    .layer(AddExtensionLayer::new(schema))
+    .layer(CompressionLayer::new().gzip(true).no_deflate().no_br())
+    .layer(TimeoutLayer::new(REQUEST_TIMEOUT))
+    .layer(ConcurrencyLimitLayer::new(CONCURRENCY_LIMIT));
 
     tokio::runtime::Builder::new_multi_thread()
         .worker_threads(WORKER_THREAD_NUM)
@@ -60,7 +67,7 @@ fn main() -> Result<()> {
         .block_on(async {
             let mut config: config::LiveConfig = CommonConfig::new_or_load_config(
                 backend_password.clone(),
-                crate::config::CONFIG_FILE_PATH.clone(),
+                crate::config::CONFIG_FILE_PATH.as_path(),
             )
             .await
             .expect("failed to load config");

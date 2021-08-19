@@ -44,7 +44,7 @@ fn main() -> Result<()> {
         .block_on(async {
             let config: config::LiveConfig = CommonConfig::new_or_load_config(
                 password.clone(),
-                crate::config::CONFIG_FILE_PATH.clone(),
+                crate::config::CONFIG_FILE_PATH.as_path(),
             )
             .await
             .expect("failed to load config");

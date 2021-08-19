@@ -8,7 +8,7 @@ acfunliveapi = { version = "0.1.0", git = "https://github.com/orzogc/acfunliveap
 acfunlivedanmaku = { version = "0.1.0", git = "https://github.com/orzogc/acfunliveapi", branch = "main" }
 acfunlivedata-common = { version = "0.1.0", path = "../common" }
 ahash = { version = "0.7.4", features = ["serde"] }
-anyhow = "1.0.42"
+anyhow = "1.0.43"
 #async-trait = "0.1.51"
 #bb8 = "0.7.0"
 chrono = { version = "0.4.19", default-features = false, features = ["clock"] }

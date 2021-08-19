@@ -166,7 +166,7 @@ mod tests {
         let mut new_config: Config<TestConfig, _> = Config::new("bar", "");
         let old = new_config.decrypt(encrypted)?;
         assert_eq!(old, TestConfig::default());
-        assert_eq!(config.deref(), new_config.deref());
+        assert_eq!(*config, *new_config);
 
         Ok(())
     }

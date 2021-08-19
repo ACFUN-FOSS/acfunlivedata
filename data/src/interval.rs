@@ -1,5 +1,5 @@
 use once_cell::sync::Lazy;
-use std::{ops::Deref, time::Duration};
+use std::time::Duration;
 use tokio::{
     sync::broadcast::{channel, Sender},
     time,
@@ -19,8 +19,7 @@ pub struct Tick;
 
 #[inline]
 pub async fn send_tick() {
-    let tx = WATCH_INTERVAL_TX.deref();
-    send_tick_with_interval(tx, WATCH_INTERVAL).await
+    send_tick_with_interval(&*WATCH_INTERVAL_TX, WATCH_INTERVAL).await
 }
 
 async fn send_tick_with_interval(interval_tx: &Sender<Tick>, interval: i64) {
