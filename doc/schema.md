@@ -19,7 +19,6 @@ type Gift {
         sendTime: Int!
         userInfo: UserInfo
         giftId: Int!
-        giftInfo: GiftInfo
         count: Int!
         combo: Int!
         value: Int!
@@ -119,7 +118,7 @@ type QueryRoot {
         deleteLiver(token: String!, liverUid: Int!): Token!
         liverUid(token: String!): Int!
         live(token: String!, liveId: [String!], liverUid: [Int!], start: Int, end: Int): [Live!]!
-        giftInfo(token: String!, giftId: [Int!], all: Boolean): [GiftInfo!]!
+        giftInfo(token: String!, giftId: [Int!], allHistory: Boolean): [GiftInfo!]!
         liveInfo(token: String!, liveId: [String!], start: Int, end: Int, liverUid: Int): [LiveInfo!]!
         title(token: String!, liveId: [String!], start: Int, end: Int, liverUid: Int): [Title!]!
         liverInfo(token: String!, liveId: [String!], start: Int, end: Int, liverUid: Int): [LiverInfo!]!

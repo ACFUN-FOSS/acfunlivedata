@@ -229,13 +229,7 @@ macro_rules! cached_stmt {
         match ($conn).conn.prepare_cached(($sql)) {
             Ok(stmt) => stmt,
             Err(e) => {
-                log::error!(
-                    "[{}] [{}] failed to prepare {} statement: {}",
-                    ($conn).live_id,
-                    ($conn).liver_uid,
-                    ($s),
-                    e
-                );
+                log::error!("{} failed to prepare {} statement: {}", ($conn), ($s), e);
                 return;
             }
         }
@@ -301,12 +295,7 @@ impl Conn {
             ":disable_danmaku_show": info.disable_danmaku_show,
             ":paid_show_user_buy_status": info.paid_show_user_buy_status,
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert live_info: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert live_info: {}", self, e);
         }
     }
 
@@ -325,12 +314,7 @@ impl Conn {
             }
             Ok(None) => {}
             Err(e) => {
-                log::error!(
-                    "[{}] [{}] failed to select title: {}",
-                    self.live_id,
-                    self.liver_uid,
-                    e
-                );
+                log::error!("{} failed to select title: {}", self, e);
                 return;
             }
         }
@@ -340,12 +324,7 @@ impl Conn {
             ":save_time": title.save_time,
             ":title": title.title,
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert title: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert title: {}", self, e);
         }
     }
 
@@ -369,12 +348,7 @@ impl Conn {
             ":live_begin_medal_count": info.live_begin_medal_count,
             ":live_end_medal_count": info.live_end_medal_count,
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert liver_info: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert liver_info: {}", self, e);
         }
     }
 
@@ -392,12 +366,7 @@ impl Conn {
             ":medal_count": medal_count,
             ":live_id": live_id,
         }) {
-            log::error!(
-                "[{}] [{}] failed to update liver_info: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to update liver_info: {}", self, e);
         }
     }
 
@@ -412,12 +381,7 @@ impl Conn {
             ":watch_online_max_count": max_watch,
             ":banana_count": banana,
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert summary: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert summary: {}", self, e);
         }
     }
 
@@ -435,12 +399,7 @@ impl Conn {
             ":manager": comment.user_info.as_ref().map(|u| u.manager).flatten(),
             ":content": comment.content,
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert comment: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert comment: {}", self, e);
         }
     }
 
@@ -457,12 +416,7 @@ impl Conn {
             ":medal_level": follow.user_info.as_ref().map(|u| u.medal.as_ref().map(|m| m.level)).flatten(),
             ":manager": follow.user_info.as_ref().map(|u| u.manager).flatten(),
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert follow: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert follow: {}", self, e);
         }
     }
 
@@ -487,12 +441,7 @@ impl Conn {
             ":expire_duration": gift.expire_duration,
             ":draw_gift_info": gift.draw_gift_info,
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert gift: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert gift: {}", self, e);
         }
     }
 
@@ -506,12 +455,7 @@ impl Conn {
             ":uper_uid": join_club.uper_info.as_ref().map(|u| u.user_id),
             ":uper_nickname": join_club.uper_info.as_ref().map(|u| &u.nickname),
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert join_club: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert join_club: {}", self, e);
         }
     }
 
@@ -522,12 +466,7 @@ impl Conn {
             ":save_time": count.save_time,
             ":watching_count": count.watching_count,
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert watching_count: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert watching_count: {}", self, e);
         }
     }
 
@@ -550,12 +489,7 @@ impl Conn {
             ":grab_begin_time": redpack.grab_begin_time,
             ":settle_begin_time": redpack.settle_begin_time,
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert redpack: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert redpack: {}", self, e);
         }
     }
 
@@ -566,12 +500,7 @@ impl Conn {
             ":live_id": chat_call.live_id,
             ":call_time": chat_call.call_time,
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert chat_call: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert chat_call: {}", self, e);
         }
     }
 
@@ -590,12 +519,7 @@ impl Conn {
             ":guest_manager": chat_ready.guest_info.as_ref().map(|u| u.manager).flatten(),
             ":media_type": chat_ready.media_type,
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert chat_ready: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert chat_ready: {}", self, e);
         }
     }
 
@@ -607,12 +531,7 @@ impl Conn {
             ":save_time": chat_end.save_time,
             ":end_type": chat_end.end_type,
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert chat_end: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert chat_end: {}", self, e);
         }
     }
 
@@ -632,12 +551,7 @@ impl Conn {
             ":inviter_enable_jump_peer_live_room": chat_call.inviter_info.as_ref().map(|i| i.enable_jump_peer_live_room),
             ":call_time": chat_call.call_time,
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert author_chat_call: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert author_chat_call: {}", self, e);
         }
     }
 
@@ -666,12 +580,7 @@ impl Conn {
             ":invitee_live_id": chat_ready.invitee_info.as_ref().map(|i| &i.live_id),
             ":invitee_enable_jump_peer_live_room": chat_ready.invitee_info.as_ref().map(|i| i.enable_jump_peer_live_room),
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert author_chat_ready: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert author_chat_ready: {}", self, e);
         }
     }
 
@@ -684,12 +593,7 @@ impl Conn {
             ":end_type": chat_end.end_type,
             ":end_live_id": chat_end.end_live_id,
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert author_chat_end: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert author_chat_end: {}", self, e);
         }
     }
 
@@ -706,9 +610,8 @@ impl Conn {
             ":sound_config_change_type": config.sound_config_change_type,
         }) {
             log::error!(
-                "[{}] [{}] failed to insert author_chat_change_sound_config: {}",
-                self.live_id,
-                self.liver_uid,
+                "{} failed to insert author_chat_change_sound_config: {}",
+                self,
                 e
             );
         }
@@ -721,12 +624,13 @@ impl Conn {
             ":save_time": alert.save_time,
             ":violation_content": alert.violation_content,
         }) {
-            log::error!(
-                "[{}] [{}] failed to insert violation_alert: {}",
-                self.live_id,
-                self.liver_uid,
-                e
-            );
+            log::error!("{} failed to insert violation_alert: {}", self, e);
         }
+    }
+}
+
+impl std::fmt::Display for Conn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] [{}]", self.live_id, self.liver_uid)
     }
 }
