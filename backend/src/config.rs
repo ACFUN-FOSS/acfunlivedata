@@ -18,7 +18,6 @@ use tokio::sync::Mutex;
 
 const CONFIG_FILE: &str = "acfunlivedata_backend.json";
 const TOKEN_LENGTH: usize = 20;
-pub const SUPER_TOKEN_UID: i64 = 0;
 
 pub static CONFIG_FILE_PATH: Lazy<PathBuf> = Lazy::new(|| {
     let mut path = DIRECTORY_PATH.clone();
@@ -28,8 +27,9 @@ pub static CONFIG_FILE_PATH: Lazy<PathBuf> = Lazy::new(|| {
 
 pub static CONFIG: OnceCell<Arc<Mutex<LiveConfig>>> = OnceCell::new();
 
-pub type Livers = AHashMap<String, i64>;
 pub type LiveConfig = CommonConfig<Config, &'static Path>;
+
+type Users = AHashMap<String, User>;
 
 #[inline]
 pub fn generate_token() -> String {
@@ -40,53 +40,85 @@ pub fn generate_token() -> String {
         .collect()
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub enum User {
+    Admin,
+    Liver(i64),
+}
+
+impl User {
+    #[inline]
+    pub fn is_admin(&self) -> bool {
+        self == &User::Admin
+    }
+
+    #[inline]
+    pub fn is_liver(&self, liver_uid: i64) -> bool {
+        self == &User::Liver(liver_uid)
+    }
+}
+
 #[derive(Clone, Debug, SimpleObject)]
-pub struct Token {
+pub struct TokenInfo {
     pub exist: bool,
     pub token: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Config {
-    livers: Livers,
+    users: Users,
 }
 
 impl Config {
     #[inline]
     pub fn contains_uid(&self, liver_uid: i64) -> bool {
-        self.livers.values().any(|i| *i == liver_uid)
-    }
-
-    #[inline]
-    pub fn contains_token(&self, token: &str) -> bool {
-        self.livers.contains_key(token)
-    }
-
-    #[inline]
-    pub fn contains_super_token(&self) -> bool {
-        self.contains_uid(SUPER_TOKEN_UID)
-    }
-
-    #[inline]
-    pub fn get(&self, token: &str) -> Option<&i64> {
-        self.livers.get(token)
-    }
-
-    #[inline]
-    pub fn set_super_token(&mut self, token: String) {
-        let _ = self.livers.insert(token, SUPER_TOKEN_UID);
-    }
-
-    #[inline]
-    pub fn is_super_token(&self, token: &str) -> bool {
-        if let Some(liver_uid) = self.livers.get(token) {
-            *liver_uid == SUPER_TOKEN_UID
+        if liver_uid > 0 {
+            self.users.values().any(|i| i.is_liver(liver_uid))
         } else {
             false
         }
     }
 
-    pub async fn add_liver(&mut self, liver_uid: i64, tool: bool) -> Result<Token> {
+    #[inline]
+    pub fn contains_token(&self, token: &str) -> bool {
+        self.users.contains_key(token)
+    }
+
+    #[inline]
+    pub fn contains_admin_token(&self) -> bool {
+        self.users.values().any(|i| i.is_admin())
+    }
+
+    #[inline]
+    pub fn get(&self, token: &str) -> Option<User> {
+        self.users.get(token).copied()
+    }
+
+    #[inline]
+    pub fn set_admin_token(&mut self, token: String) {
+        let _ = self.users.insert(token, User::Admin);
+    }
+
+    #[inline]
+    pub fn set_liver_token(&mut self, token: String, liver_uid: i64) -> Result<()> {
+        if liver_uid > 0 {
+            let _ = self.users.insert(token, User::Liver(liver_uid));
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("liver uid {} is less than 1", liver_uid))
+        }
+    }
+
+    #[inline]
+    pub fn is_admin_token(&self, token: &str) -> bool {
+        if let Some(user) = self.users.get(token) {
+            user.is_admin()
+        } else {
+            false
+        }
+    }
+
+    pub async fn add_liver(&mut self, liver_uid: i64, tool: bool) -> Result<TokenInfo> {
         if liver_uid > 0 {
             log::info!("add liver {}", liver_uid);
             let token = generate_token();
@@ -94,7 +126,7 @@ impl Config {
             if self.contains_uid(liver_uid) {
                 exist = true;
                 log::warn!("already added liver {} before", liver_uid);
-                self.livers.retain(|_, i| *i != liver_uid);
+                self.users.retain(|_, i| !i.is_liver(liver_uid));
                 if tool {
                     send_tool_message(&ToolMessage::BackendAddLiver(
                         liver_uid,
@@ -114,8 +146,8 @@ impl Config {
             if !tool {
                 send_data_message(&DataCenterMessage::AddLiver(liver_uid, false)).await;
             }
-            let _ = self.livers.insert(token.clone(), liver_uid);
-            Ok(Token {
+            self.set_liver_token(token.clone(), liver_uid)?;
+            Ok(TokenInfo {
                 exist,
                 token: Some(token),
             })
@@ -124,13 +156,13 @@ impl Config {
         }
     }
 
-    pub async fn delete_liver(&mut self, liver_uid: i64, tool: bool) -> Result<Token> {
+    pub async fn delete_liver(&mut self, liver_uid: i64, tool: bool) -> Result<TokenInfo> {
         if liver_uid > 0 {
             log::info!("delete liver {}", liver_uid);
             let mut exist = false;
             if self.contains_uid(liver_uid) {
                 exist = true;
-                self.livers.retain(|_, i| *i != liver_uid);
+                self.users.retain(|_, i| !i.is_liver(liver_uid));
                 if tool {
                     send_tool_message(&ToolMessage::BackendDeleteLiver(liver_uid, true)).await;
                 }
@@ -143,7 +175,7 @@ impl Config {
             if !tool {
                 send_data_message(&DataCenterMessage::DeleteLiver(liver_uid, false)).await;
             }
-            Ok(Token { exist, token: None })
+            Ok(TokenInfo { exist, token: None })
         } else {
             bail!("liver uid {} is less than 1", liver_uid);
         }

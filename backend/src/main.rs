@@ -1,3 +1,4 @@
+mod auth;
 mod config;
 mod graphql;
 mod model;
@@ -53,10 +54,11 @@ fn main() -> Result<()> {
         "/",
         get(graphql::graphql_playground).post(graphql::graphql_handler),
     )
-    .layer(AddExtensionLayer::new(schema))
-    .layer(CompressionLayer::new().gzip(true).no_deflate().no_br())
+    .layer(ConcurrencyLimitLayer::new(CONCURRENCY_LIMIT))
     .layer(TimeoutLayer::new(REQUEST_TIMEOUT))
-    .layer(ConcurrencyLimitLayer::new(CONCURRENCY_LIMIT));
+    //.layer(RequireAuthorizationLayer::custom(auth::Token))
+    .layer(AddExtensionLayer::new(schema))
+    .layer(CompressionLayer::new().gzip(true).no_deflate().no_br());
 
     tokio::runtime::Builder::new_multi_thread()
         .worker_threads(WORKER_THREAD_NUM)
@@ -71,10 +73,10 @@ fn main() -> Result<()> {
             )
             .await
             .expect("failed to load config");
-            if !config.contains_super_token() {
+            if !config.contains_admin_token() {
                 let token = config::generate_token();
                 println!("super auth token:\n{}", token);
-                config.set_super_token(token);
+                config.set_admin_token(token);
                 config.save_config().await.expect("failed to save config");
             }
             if config::CONFIG.set(Arc::new(Mutex::new(config))).is_err() {

@@ -1,5 +1,5 @@
 use crate::{
-    config::{Token, CONFIG, SUPER_TOKEN_UID},
+    config::{TokenInfo, User, CONFIG},
     pool::Connection,
     sql::*,
     sqlite::connect,
@@ -69,17 +69,22 @@ macro_rules! get_pool {
     ($token:expr, $liver_uid:expr) => {{
         let uid = {
             let config = CONFIG.get().expect("failed to get CONFIG").lock().await;
-            if let Some(uid) = config.get(&($token)) {
-                if *uid == SUPER_TOKEN_UID {
-                    if let Some(liver_uid) = &($liver_uid) {
-                        *liver_uid
-                    } else {
-                        bail!("super auth token need liver_uid");
+            if let Some(user) = config.get(&($token)) {
+                match user {
+                    User::Admin => {
+                        if let Some(liver_uid) = &($liver_uid) {
+                            *liver_uid
+                        } else {
+                            bail!("admin token need liver_uid");
+                        }
                     }
-                } else if ($liver_uid).is_some() {
-                    bail!("normal token don't need liver_uid");
-                } else {
-                    *uid
+                    User::Liver(uid) => {
+                        if ($liver_uid).is_some() {
+                            bail!("normal token don't need liver_uid");
+                        } else {
+                            uid
+                        }
+                    }
                 }
             } else {
                 bail!("invalid token");
@@ -100,10 +105,10 @@ impl QueryRoot {
         )))]
         token: String,
         #[graphql(validator(IntGreaterThan(value = "0")))] liver_uid: i64,
-    ) -> Result<Token> {
+    ) -> Result<TokenInfo> {
         let mut config = CONFIG.get().expect("failed to get CONFIG").lock().await;
-        if !config.is_super_token(&token) {
-            bail!("invalid super auth token");
+        if !config.is_admin_token(&token) {
+            bail!("invalid admin token");
         }
         let token = config.add_liver(liver_uid, false).await?;
         config.save_config().await?;
@@ -120,10 +125,10 @@ impl QueryRoot {
         )))]
         token: String,
         #[graphql(validator(IntGreaterThan(value = "0")))] liver_uid: i64,
-    ) -> Result<Token> {
+    ) -> Result<TokenInfo> {
         let mut config = CONFIG.get().expect("failed to get CONFIG").lock().await;
-        if !config.is_super_token(&token) {
-            bail!("invalid super auth token");
+        if !config.is_admin_token(&token) {
+            bail!("invalid admin token");
         }
         let token = config.delete_liver(liver_uid, false).await?;
         config.save_config().await?;
@@ -140,11 +145,10 @@ impl QueryRoot {
         token: String,
     ) -> Result<i64> {
         let config = CONFIG.get().expect("failed to get CONFIG").lock().await;
-        if let Some(liver_uid) = config.get(&token) {
-            if *liver_uid == SUPER_TOKEN_UID {
-                bail!("this is a super auth token, liver uid doesn't exist");
-            } else {
-                Ok(*liver_uid)
+        if let Some(user) = config.get(&token) {
+            match user {
+                User::Admin => bail!("this is an admin token, liver uid doesn't exist"),
+                User::Liver(liver_uid) => Ok(liver_uid),
             }
         } else {
             bail!("invalid token");
@@ -169,8 +173,8 @@ impl QueryRoot {
         let pool = connect(ACFUN_LIVE_DATABASE.clone()).await?;
         {
             let config = CONFIG.get().expect("failed to get CONFIG").lock().await;
-            if !config.is_super_token(&token) {
-                bail!("invalid super auth token");
+            if !config.is_admin_token(&token) {
+                bail!("invalid admin token");
             }
         }
 
@@ -243,7 +247,7 @@ impl QueryRoot {
             v.dedup();
             v
         });
-        cache_gift_info_vec(gift_id, all_history).await
+        cache_gift_info(gift_id, all_history).await
     }
 
     async fn live_info(
@@ -603,17 +607,6 @@ impl QueryRoot {
                     })
                 })?
                 .collect::<rusqlite::Result<Vec<Gift>>>()?;
-            /*
-            let mut gift_id_list = gifts.iter().map(|g| g.gift_id).collect::<Vec<_>>();
-            gift_id_list.sort_unstable();
-            gift_id_list.dedup();
-            let map = futures::executor::block_on(cache_gift_info_map(gift_id_list))?;
-            for gift in gifts.iter_mut() {
-                if let Some(info) = map.get(&gift.gift_id) {
-                    gift.gift_info = Some(info.clone());
-                }
-            }
-            */
 
             Ok(gifts)
         })
@@ -719,7 +712,7 @@ impl QueryRoot {
 }
 
 #[cached(size = 100, time = 1800, result = true)]
-async fn cache_gift_info_vec(
+async fn cache_gift_info(
     gift_id: Option<Vec<i64>>,
     all_history: Option<bool>,
 ) -> Result<Vec<GiftInfo>> {
@@ -765,49 +758,6 @@ async fn cache_gift_info_vec(
     })
     .await?
 }
-
-/*
-#[cached(size = 100, time = 1800, result = true)]
-async fn cache_gift_info_map(gift_id: Vec<i64>) -> Result<AHashMap<i64, GiftInfo>> {
-    let gift_id = if gift_id.is_empty() {
-        return Ok(AHashMap::new());
-    } else {
-        Some(gift_id)
-    };
-    let pool = connect(GIFT_DATABASE.clone()).await?;
-
-    tokio::task::spawn_blocking(move || {
-        let (mut sql, params) = sql_and_params!(
-            SELECT_GIFT_INFO;
-            (gift_id, GIFT_ID);
-        );
-        let _ = sql.pop();
-        sql += ORDER_SAVE_TIME_DESC;
-        sql += SEMICOLON;
-
-        let conn = futures::executor::block_on(pool.get())?;
-        let map = gift_info(&conn, &sql, &params)?.into_iter().fold(
-            AHashMap::<i64, GiftInfo>::new(),
-            |mut m, g| {
-                match m.get(&g.gift_id) {
-                    Some(og) => {
-                        if g.save_time > og.save_time {
-                            let _ = m.insert(g.gift_id, g);
-                        }
-                    }
-                    None => {
-                        let _ = m.insert(g.gift_id, g);
-                    }
-                }
-                m
-            },
-        );
-
-        Ok(map)
-    })
-    .await?
-}
-*/
 
 #[inline]
 fn gift_info(
