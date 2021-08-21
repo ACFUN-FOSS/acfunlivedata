@@ -8,8 +8,8 @@ use acfunlivedata_common::{data::*, database::*};
 use ahash::AHashMap;
 use anyhow::{bail, Result};
 use async_graphql::{
-    validators::{IntGreaterThan, ListMinLength, StringMaxLength, StringMinLength},
-    Object,
+    validators::{IntGreaterThan, ListMinLength, StringMinLength},
+    Context, Object,
 };
 use cached::proc_macro::cached;
 use rusqlite::ToSql;
@@ -29,68 +29,51 @@ macro_rules! compare_start_end {
 }
 
 macro_rules! sql_and_params {
-    ($sql:expr; $(($varg:expr, $vsqlstr:expr)),*; $(($sarg:expr, $ssqlstr:expr)),*) => {
-        {
-            let mut sql = ($sql).to_string();
-            let mut params: Vec<&dyn ToSql> = Vec::new();
-            let mut where_or_and = iter::once(WHERE).chain(iter::repeat(AND));
-            $(
-                if let Some(varg) = &($varg) {
-                    let n = varg.len();
-                    for (i, arg) in varg.iter().enumerate() {
-                        if i == 0 {
-                            sql += where_or_and.next().unwrap();
-                            sql += LEFT_PARENTHESES;
-                        } else {
-                            sql += OR;
-                        }
-                        sql += ($vsqlstr);
-                        if i == n - 1 {
-                            sql += RIGHT_PARENTHESES;
-                        }
-                        params.push(arg);
+    ($sql:expr; $(($varg:expr, $vsqlstr:expr)),*; $(($sarg:expr, $ssqlstr:expr)),*) => {{
+        let mut sql = ($sql).to_string();
+        let mut params: Vec<&dyn ToSql> = Vec::new();
+        let mut where_or_and = iter::once(WHERE).chain(iter::repeat(AND));
+        $(
+            if let Some(varg) = &($varg) {
+                let n = varg.len();
+                for (i, arg) in varg.iter().enumerate() {
+                    if i == 0 {
+                        sql += where_or_and.next().unwrap();
+                        sql += LEFT_PARENTHESES;
+                    } else {
+                        sql += OR;
                     }
-                }
-            )*
-            $(
-                if let Some(arg) = &($sarg) {
-                    sql += where_or_and.next().unwrap();
-                    sql += ($ssqlstr);
+                    sql += ($vsqlstr);
+                    if i == n - 1 {
+                        sql += RIGHT_PARENTHESES;
+                    }
                     params.push(arg);
                 }
-            )*
-            sql += SEMICOLON;
-            (sql, params)
-        }
-    }
+            }
+        )*
+        $(
+            if let Some(arg) = &($sarg) {
+                sql += where_or_and.next().unwrap();
+                sql += ($ssqlstr);
+                params.push(arg);
+            }
+        )*
+        sql += SEMICOLON;
+        (sql, params)
+    }}
 }
 
 macro_rules! get_pool {
-    ($token:expr, $liver_uid:expr) => {{
-        let uid = {
-            let config = CONFIG.get().expect("failed to get CONFIG").lock().await;
-            if let Some(user) = config.get(&($token)) {
-                match user {
-                    User::Admin => {
-                        if let Some(liver_uid) = &($liver_uid) {
-                            *liver_uid
-                        } else {
-                            bail!("admin token need liver_uid");
-                        }
-                    }
-                    User::Liver(uid) => {
-                        if ($liver_uid).is_some() {
-                            bail!("normal token don't need liver_uid");
-                        } else {
-                            uid
-                        }
-                    }
-                }
-            } else {
-                bail!("invalid token");
+    ($ctx:expr, $liver_uid:expr) => {{
+        let liver_uid = {
+            match (($ctx).data_unchecked::<User>(), &($liver_uid)) {
+                (User::Admin, None) => bail!("admin token need liver_uid"),
+                (User::Admin, Some(liver_uid)) => *liver_uid,
+                (User::Liver(liver_uid), None) => *liver_uid,
+                (User::Liver(_), Some(_)) => bail!("liver token don't need liver_uid"),
             }
         };
-        connect(liver_db_path(uid)).await?
+        connect(liver_db_path(liver_uid)).await?
     }};
 }
 
@@ -99,17 +82,13 @@ impl QueryRoot {
     #[graphql(visible = false)]
     async fn add_liver(
         &self,
-        #[graphql(validator(and(
-            StringMaxLength(length = "20"),
-            StringMinLength(length = "20")
-        )))]
-        token: String,
+        ctx: &Context<'_>,
         #[graphql(validator(IntGreaterThan(value = "0")))] liver_uid: i64,
     ) -> Result<TokenInfo> {
-        let mut config = CONFIG.get().expect("failed to get CONFIG").lock().await;
-        if !config.is_admin_token(&token) {
-            bail!("invalid admin token");
+        if !ctx.data_unchecked::<User>().is_admin() {
+            bail!("the admin authorization is needed");
         }
+        let mut config = CONFIG.get().expect("failed to get CONFIG").lock().await;
         let token = config.add_liver(liver_uid, false).await?;
         config.save_config().await?;
 
@@ -119,50 +98,31 @@ impl QueryRoot {
     #[graphql(visible = false)]
     async fn delete_liver(
         &self,
-        #[graphql(validator(and(
-            StringMaxLength(length = "20"),
-            StringMinLength(length = "20")
-        )))]
-        token: String,
+        ctx: &Context<'_>,
         #[graphql(validator(IntGreaterThan(value = "0")))] liver_uid: i64,
     ) -> Result<TokenInfo> {
-        let mut config = CONFIG.get().expect("failed to get CONFIG").lock().await;
-        if !config.is_admin_token(&token) {
-            bail!("invalid admin token");
+        if !ctx.data_unchecked::<User>().is_admin() {
+            bail!("the admin authorization is needed");
         }
+        let mut config = CONFIG.get().expect("failed to get CONFIG").lock().await;
         let token = config.delete_liver(liver_uid, false).await?;
         config.save_config().await?;
 
         Ok(token)
     }
 
-    async fn liver_uid(
-        &self,
-        #[graphql(validator(and(
-            StringMaxLength(length = "20"),
-            StringMinLength(length = "20")
-        )))]
-        token: String,
-    ) -> Result<i64> {
-        let config = CONFIG.get().expect("failed to get CONFIG").lock().await;
-        if let Some(user) = config.get(&token) {
-            match user {
-                User::Admin => bail!("this is an admin token, liver uid doesn't exist"),
-                User::Liver(liver_uid) => Ok(liver_uid),
-            }
-        } else {
-            bail!("invalid token");
+    #[inline]
+    async fn liver_uid(&self, ctx: &Context<'_>) -> Result<i64> {
+        match ctx.data_unchecked::<User>() {
+            User::Admin => bail!("this is an admin token, liver uid doesn't exist"),
+            User::Liver(liver_uid) => Ok(*liver_uid),
         }
     }
 
     #[graphql(visible = false)]
     async fn live(
         &self,
-        #[graphql(validator(and(
-            StringMaxLength(length = "20"),
-            StringMinLength(length = "20")
-        )))]
-        token: String,
+        ctx: &Context<'_>,
         #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
         live_id: Option<Vec<String>>,
         #[graphql(validator(and(ListMinLength(length = "1"), IntGreaterThan(value = "0"))))]
@@ -170,13 +130,10 @@ impl QueryRoot {
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
     ) -> Result<Vec<Live>> {
-        let pool = connect(ACFUN_LIVE_DATABASE.clone()).await?;
-        {
-            let config = CONFIG.get().expect("failed to get CONFIG").lock().await;
-            if !config.is_admin_token(&token) {
-                bail!("invalid admin token");
-            }
+        if !ctx.data_unchecked::<User>().is_admin() {
+            bail!("the admin authorization is needed");
         }
+        let pool = connect(ACFUN_LIVE_DATABASE.clone()).await?;
 
         tokio::task::spawn_blocking(move || {
             compare_start_end!(start, end);
@@ -224,46 +181,32 @@ impl QueryRoot {
         .await?
     }
 
+    #[inline]
     async fn gift_info(
         &self,
-        #[graphql(validator(and(
-            StringMaxLength(length = "20"),
-            StringMinLength(length = "20")
-        )))]
-        token: String,
         #[graphql(validator(and(ListMinLength(length = "1"), IntGreaterThan(value = "0"))))]
         gift_id: Option<Vec<i64>>,
         #[graphql(visible = false)] all_history: Option<bool>,
     ) -> Result<Vec<GiftInfo>> {
-        {
-            let config = CONFIG.get().expect("failed to get CONFIG").lock().await;
-            if !config.contains_token(&token) {
-                bail!("invalid token");
-            }
-        }
-
         let gift_id = gift_id.map(|mut v| {
             v.sort_unstable();
             v.dedup();
             v
         });
+
         cache_gift_info(gift_id, all_history).await
     }
 
     async fn live_info(
         &self,
-        #[graphql(validator(and(
-            StringMaxLength(length = "20"),
-            StringMinLength(length = "20")
-        )))]
-        token: String,
+        ctx: &Context<'_>,
         #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
         live_id: Option<Vec<String>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<LiveInfo>> {
-        let pool = get_pool!(token, liver_uid);
+        let pool = get_pool!(ctx, liver_uid);
 
         tokio::task::spawn_blocking(move || {
             compare_start_end!(start, end);
@@ -331,18 +274,15 @@ impl QueryRoot {
 
     async fn title(
         &self,
-        #[graphql(validator(and(
-            StringMaxLength(length = "20"),
-            StringMinLength(length = "20")
-        )))]
-        token: String,
+        ctx: &Context<'_>,
         #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
         live_id: Option<Vec<String>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<Title>> {
-        let pool = get_pool!(token, liver_uid);
+        let pool = get_pool!(ctx, liver_uid);
+
         tokio::task::spawn_blocking(move || {
             compare_start_end!(start, end);
             let (sql, params) = sql_and_params!(
@@ -360,18 +300,15 @@ impl QueryRoot {
 
     async fn liver_info(
         &self,
-        #[graphql(validator(and(
-            StringMaxLength(length = "20"),
-            StringMinLength(length = "20")
-        )))]
-        token: String,
+        ctx: &Context<'_>,
         #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
         live_id: Option<Vec<String>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<LiverInfo>> {
-        let pool = get_pool!(token, liver_uid);
+        let pool = get_pool!(ctx, liver_uid);
+
         tokio::task::spawn_blocking(move || {
             compare_start_end!(start, end);
             let (sql, params) = sql_and_params!(
@@ -389,18 +326,15 @@ impl QueryRoot {
 
     async fn summary(
         &self,
-        #[graphql(validator(and(
-            StringMaxLength(length = "20"),
-            StringMinLength(length = "20")
-        )))]
-        token: String,
+        ctx: &Context<'_>,
         #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
         live_id: Option<Vec<String>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<Summary>> {
-        let pool = get_pool!(token, liver_uid);
+        let pool = get_pool!(ctx, liver_uid);
+
         tokio::task::spawn_blocking(move || {
             compare_start_end!(start, end);
             let (sql, params) = sql_and_params!(
@@ -419,11 +353,7 @@ impl QueryRoot {
     #[allow(clippy::too_many_arguments)]
     async fn comment(
         &self,
-        #[graphql(validator(and(
-            StringMaxLength(length = "20"),
-            StringMinLength(length = "20")
-        )))]
-        token: String,
+        ctx: &Context<'_>,
         #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
         live_id: Option<Vec<String>>,
         #[graphql(validator(and(ListMinLength(length = "1"), IntGreaterThan(value = "0"))))]
@@ -432,7 +362,7 @@ impl QueryRoot {
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<Comment>> {
-        let pool = get_pool!(token, liver_uid);
+        let pool = get_pool!(ctx, liver_uid);
 
         tokio::task::spawn_blocking(move || {
             compare_start_end!(start, end);
@@ -482,18 +412,14 @@ impl QueryRoot {
 
     async fn follow(
         &self,
-        #[graphql(validator(and(
-            StringMaxLength(length = "20"),
-            StringMinLength(length = "20")
-        )))]
-        token: String,
+        ctx: &Context<'_>,
         #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
         live_id: Option<Vec<String>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<Follow>> {
-        let pool = get_pool!(token, liver_uid);
+        let pool = get_pool!(ctx, liver_uid);
 
         tokio::task::spawn_blocking(move || {
             compare_start_end!(start, end);
@@ -542,11 +468,7 @@ impl QueryRoot {
     #[allow(clippy::too_many_arguments)]
     async fn gift(
         &self,
-        #[graphql(validator(and(
-            StringMaxLength(length = "20"),
-            StringMinLength(length = "20")
-        )))]
-        token: String,
+        ctx: &Context<'_>,
         #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
         live_id: Option<Vec<String>>,
         #[graphql(validator(and(ListMinLength(length = "1"), IntGreaterThan(value = "0"))))]
@@ -557,7 +479,7 @@ impl QueryRoot {
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<Gift>> {
-        let pool = get_pool!(token, liver_uid);
+        let pool = get_pool!(ctx, liver_uid);
 
         tokio::task::spawn_blocking(move || {
             compare_start_end!(start, end);
@@ -615,18 +537,14 @@ impl QueryRoot {
 
     async fn join_club(
         &self,
-        #[graphql(validator(and(
-            StringMaxLength(length = "20"),
-            StringMinLength(length = "20")
-        )))]
-        token: String,
+        ctx: &Context<'_>,
         #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
         live_id: Option<Vec<String>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<JoinClub>> {
-        let pool = get_pool!(token, liver_uid);
+        let pool = get_pool!(ctx, liver_uid);
 
         tokio::task::spawn_blocking(move || {
             compare_start_end!(start, end);
@@ -671,18 +589,14 @@ impl QueryRoot {
 
     async fn watching_count(
         &self,
-        #[graphql(validator(and(
-            StringMaxLength(length = "20"),
-            StringMinLength(length = "20")
-        )))]
-        token: String,
+        ctx: &Context<'_>,
         #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
         live_id: Option<Vec<String>>,
         #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<WatchingCount>> {
-        let pool = get_pool!(token, liver_uid);
+        let pool = get_pool!(ctx, liver_uid);
 
         tokio::task::spawn_blocking(move || {
             compare_start_end!(start, end);

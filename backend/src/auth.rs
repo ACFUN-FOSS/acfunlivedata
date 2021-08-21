@@ -1,4 +1,4 @@
-use crate::config::{User, CONFIG};
+use crate::config::{User, CONFIG, TOKEN_LENGTH};
 use axum::{
     body::{box_body, Body, BoxBody},
     http::{header::AUTHORIZATION, Request, Response, StatusCode},
@@ -19,6 +19,11 @@ impl AuthorizeRequest for Token {
             Some(v) => v.to_str().ok()?,
             None => return None,
         };
+        // 长度不符合
+        if token.len() != TOKEN_LENGTH {
+            return None;
+        }
+        // header数量大于一
         if headers.next().is_some() {
             return None;
         }

@@ -1,4 +1,4 @@
-use crate::model::QueryRoot;
+use crate::{config::User, model::QueryRoot};
 use async_graphql::{
     extensions::Logger,
     http::{playground_source, GraphQLPlaygroundConfig},
@@ -11,7 +11,6 @@ pub type LiveSchema = Schema<QueryRoot, EmptyMutation, EmptySubscription>;
 #[inline]
 pub fn schema() -> LiveSchema {
     Schema::build(QueryRoot, EmptyMutation, EmptySubscription)
-        //.limit_depth(5)
         .extension(Logger)
         .finish()
 }
@@ -24,7 +23,9 @@ pub async fn graphql_playground() -> impl response::IntoResponse {
 #[inline]
 pub async fn graphql_handler(
     schema: extract::Extension<LiveSchema>,
+    user: extract::Extension<User>,
     req: extract::Json<Request>,
 ) -> response::Json<Response> {
-    schema.execute(req.0).await.into()
+    let req = req.0.data(user.0);
+    schema.execute(req).await.into()
 }

@@ -16,8 +16,9 @@ use std::{
 };
 use tokio::sync::Mutex;
 
+pub const TOKEN_LENGTH: usize = 32;
+
 const CONFIG_FILE: &str = "acfunlivedata_backend.json";
-const TOKEN_LENGTH: usize = 20;
 
 pub static CONFIG_FILE_PATH: Lazy<PathBuf> = Lazy::new(|| {
     let mut path = DIRECTORY_PATH.clone();
@@ -80,11 +81,6 @@ impl Config {
     }
 
     #[inline]
-    pub fn contains_token(&self, token: &str) -> bool {
-        self.users.contains_key(token)
-    }
-
-    #[inline]
     pub fn contains_admin_token(&self) -> bool {
         self.users.values().any(|i| i.is_admin())
     }
@@ -106,15 +102,6 @@ impl Config {
             Ok(())
         } else {
             Err(anyhow::anyhow!("liver uid {} is less than 1", liver_uid))
-        }
-    }
-
-    #[inline]
-    pub fn is_admin_token(&self, token: &str) -> bool {
-        if let Some(user) = self.users.get(token) {
-            user.is_admin()
-        } else {
-            false
         }
     }
 

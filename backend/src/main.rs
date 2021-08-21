@@ -17,7 +17,9 @@ use rpassword::read_password_from_tty;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tower::{limit::concurrency::ConcurrencyLimitLayer, timeout::TimeoutLayer};
-use tower_http::compression::CompressionLayer;
+use tower_http::{
+    auth::require_authorization::RequireAuthorizationLayer, compression::CompressionLayer,
+};
 
 const WORKER_THREAD_NUM: usize = 10;
 const MAX_BLOCKING_THREAD: usize = 2048;
@@ -52,11 +54,11 @@ fn main() -> Result<()> {
 
     let app = route(
         "/",
-        get(graphql::graphql_playground).post(graphql::graphql_handler),
+        get(graphql::graphql_playground)
+            .post(graphql::graphql_handler.layer(RequireAuthorizationLayer::custom(auth::Token))),
     )
     .layer(ConcurrencyLimitLayer::new(CONCURRENCY_LIMIT))
     .layer(TimeoutLayer::new(REQUEST_TIMEOUT))
-    //.layer(RequireAuthorizationLayer::custom(auth::Token))
     .layer(AddExtensionLayer::new(schema))
     .layer(CompressionLayer::new().gzip(true).no_deflate().no_br());
 
@@ -75,7 +77,7 @@ fn main() -> Result<()> {
             .expect("failed to load config");
             if !config.contains_admin_token() {
                 let token = config::generate_token();
-                println!("super auth token:\n{}", token);
+                println!("admin token:\n{}", token);
                 config.set_admin_token(token);
                 config.save_config().await.expect("failed to save config");
             }
