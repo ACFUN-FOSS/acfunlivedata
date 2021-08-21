@@ -13,10 +13,11 @@ use acfunlivedanmaku::{
 use acfunlivedata_common::{data::*, message::DataCenterMessage};
 use ahash::{AHashMap, AHashSet};
 use anyhow::{Context, Result};
+use cached::proc_macro::cached;
 use futures::StreamExt;
 use once_cell::sync::{Lazy, OnceCell};
 use std::{future::Future, sync::Arc, time::Duration};
-use tokio::{sync::mpsc, sync::Mutex, time};
+use tokio::{sync::mpsc, time};
 
 pub static LIVE_TX: OnceCell<mpsc::UnboundedSender<LiveMessage>> = OnceCell::new();
 pub static ALL_LIVES_TX: OnceCell<mpsc::UnboundedSender<AllLiveData>> = OnceCell::new();
@@ -28,7 +29,9 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 const SUMMARY_WAIT: Duration = Duration::from_secs(10);
 const SUMMARY_INTERVAL: Duration = Duration::from_secs(1800);
 
-static API_CLIENT_FACTORY: Lazy<ApiClientFactory> = Lazy::new(ApiClientFactory::new);
+static API_CLIENT_BUILDER: Lazy<DefaultApiClientBuilder> = Lazy::new(|| {
+    DefaultApiClientBuilder::default_client().expect("failed to construct ApiClientBuilder")
+});
 
 type FansCount = Option<i32>;
 type MedalName = Option<String>;
@@ -79,39 +82,9 @@ struct LiveMapData {
     data_tx: mpsc::UnboundedSender<LiveData>,
 }
 
-#[derive(Clone, Debug)]
-struct ApiClientFactory {
-    num: Arc<Mutex<usize>>,
-    builder: DefaultApiClientBuilder,
-}
-
-impl ApiClientFactory {
-    const MAX: usize = 10;
-    const WAIT: Duration = Duration::from_secs(1);
-
-    #[inline]
-    fn new() -> Self {
-        Self {
-            num: Arc::new(Mutex::new(0)),
-            builder: DefaultApiClientBuilder::default_client()
-                .expect("failed to construct ApiClientBuilder"),
-        }
-    }
-
-    #[inline]
-    async fn build(&self) -> Result<DefaultApiClient> {
-        {
-            // 匿名登陆短时间内不能太频繁，不然会出错
-            let mut num = self.num.lock().await;
-            *num += 1;
-            if *num > Self::MAX {
-                *num = 0;
-                time::sleep(Self::WAIT).await;
-            }
-        }
-
-        Ok(self.builder.clone().build().await?)
-    }
+#[cached(size = 1, time = 3600, result = true)]
+async fn build_client() -> Result<DefaultApiClient> {
+    Ok(API_CLIENT_BUILDER.clone().build().await?)
 }
 
 #[inline]
@@ -168,8 +141,7 @@ impl Liver {
     }
 
     async fn gift(&self) -> Result<()> {
-        let api_client = API_CLIENT_FACTORY
-            .build()
+        let api_client = build_client()
             .await
             .with_context(|| format!("{} failed to build AcFun API client", self))?;
         let list = api_client
@@ -184,7 +156,7 @@ impl Liver {
 
     async fn danmaku(&self, live_data: ApiLiveData, liver_info: UserInfo) {
         let live_tx = LIVE_TX.get().expect("failed to get LIVE_TX");
-        let api_client = match API_CLIENT_FACTORY.build().await {
+        let api_client = match build_client().await {
             Ok(client) => client,
             Err(e) => {
                 log::error!("{} failed to build AcFun api client: {}", self, e);
@@ -445,10 +417,7 @@ impl std::fmt::Display for Liver {
 }
 
 pub async fn all_lives() {
-    let api_client = API_CLIENT_FACTORY
-        .build()
-        .await
-        .expect("failed to build api client");
+    let api_client = build_client().await.expect("failed to build api client");
     let live_tx = LIVE_TX.get().expect("failed to get LIVE_TX");
     let mut interval = time::interval(LIVE_LIST_INTERVAL);
 
@@ -606,8 +575,7 @@ pub async fn all_danmaku(
 }
 
 async fn all_summary(live_id: Arc<String>) -> Result<()> {
-    let api_client = API_CLIENT_FACTORY
-        .build()
+    let api_client = build_client()
         .await
         .with_context(|| format!("[{}] failed to build AcFun API client", live_id))?;
     let all_lives_tx = ALL_LIVES_TX.get().expect("failed to get ALL_LIVE_TX");

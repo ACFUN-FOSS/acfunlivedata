@@ -1,3 +1,5 @@
+认证：请求的 `token` header为用户的token
+
 ```
 type AcFunUserInfo {
         userId: Int!
@@ -114,20 +116,20 @@ type MedalInfo {
         level: Int!
 }
 type QueryRoot {
-        addLiver(token: String!, liverUid: Int!): Token!
-        deleteLiver(token: String!, liverUid: Int!): Token!
-        liverUid(token: String!): Int!
-        live(token: String!, liveId: [String!], liverUid: [Int!], start: Int, end: Int): [Live!]!
-        giftInfo(token: String!, giftId: [Int!], allHistory: Boolean): [GiftInfo!]!
-        liveInfo(token: String!, liveId: [String!], start: Int, end: Int, liverUid: Int): [LiveInfo!]!
-        title(token: String!, liveId: [String!], start: Int, end: Int, liverUid: Int): [Title!]!
-        liverInfo(token: String!, liveId: [String!], start: Int, end: Int, liverUid: Int): [LiverInfo!]!
-        summary(token: String!, liveId: [String!], start: Int, end: Int, liverUid: Int): [Summary!]!
-        comment(token: String!, liveId: [String!], userId: [Int!], start: Int, end: Int, liverUid: Int): [Comment!]!
-        follow(token: String!, liveId: [String!], start: Int, end: Int, liverUid: Int): [Follow!]!
-        gift(token: String!, liveId: [String!], userId: [Int!], giftId: [Int!], start: Int, end: Int, liverUid: Int): [Gift!]!
-        joinClub(token: String!, liveId: [String!], start: Int, end: Int, liverUid: Int): [JoinClub!]!
-        watchingCount(token: String!, liveId: [String!], start: Int, end: Int, liverUid: Int): [WatchingCount!]!
+        addLiver(liverUid: Int!): TokenInfo!
+        deleteLiver(liverUid: Int!): TokenInfo!
+        liverUid: Int!
+        live(liveId: [String!], liverUid: [Int!], start: Int, end: Int): [Live!]!
+        giftInfo(giftId: [Int!], allHistory: Boolean): [GiftInfo!]!
+        liveInfo(liveId: [String!], start: Int, end: Int, liverUid: Int): [LiveInfo!]!
+        title(liveId: [String!], start: Int, end: Int, liverUid: Int): [Title!]!
+        liverInfo(liveId: [String!], start: Int, end: Int, liverUid: Int): [LiverInfo!]!
+        summary(liveId: [String!], start: Int, end: Int, liverUid: Int): [Summary!]!
+        comment(liveId: [String!], userId: [Int!], start: Int, end: Int, liverUid: Int): [Comment!]!
+        follow(liveId: [String!], start: Int, end: Int, liverUid: Int): [Follow!]!
+        gift(liveId: [String!], userId: [Int!], giftId: [Int!], start: Int, end: Int, liverUid: Int): [Gift!]!
+        joinClub(liveId: [String!], start: Int, end: Int, liverUid: Int): [JoinClub!]!
+        watchingCount(liveId: [String!], start: Int, end: Int, liverUid: Int): [WatchingCount!]!
 }
 type Summary {
         liveId: String!
@@ -143,7 +145,7 @@ type Title {
         saveTime: Int!
         title: String
 }
-type Token {
+type TokenInfo {
         exist: Boolean!
         token: String
 }

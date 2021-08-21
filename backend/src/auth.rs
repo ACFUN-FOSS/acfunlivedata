@@ -1,9 +1,11 @@
 use crate::config::{User, CONFIG, TOKEN_LENGTH};
 use axum::{
     body::{box_body, Body, BoxBody},
-    http::{header::AUTHORIZATION, Request, Response, StatusCode},
+    http::{Request, Response, StatusCode},
 };
 use tower_http::auth::require_authorization::AuthorizeRequest;
+
+const AUTH_HEADER: &str = "token";
 
 #[derive(Clone, Copy, Debug)]
 pub struct Token;
@@ -14,7 +16,7 @@ impl AuthorizeRequest for Token {
     type ResponseBody = BoxBody;
 
     fn authorize<B>(&mut self, request: &Request<B>) -> Option<Self::Output> {
-        let mut headers = request.headers().get_all(AUTHORIZATION).iter();
+        let mut headers = request.headers().get_all(AUTH_HEADER).iter();
         let token = match headers.next() {
             Some(v) => v.to_str().ok()?,
             None => return None,

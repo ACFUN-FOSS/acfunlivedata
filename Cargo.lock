@@ -63,6 +63,7 @@ dependencies = [
  "acfunlivedata-common",
  "ahash",
  "anyhow",
+ "cached",
  "chrono",
  "env_logger",
  "futures",
