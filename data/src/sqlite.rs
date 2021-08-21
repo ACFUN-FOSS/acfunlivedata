@@ -210,7 +210,6 @@ pub fn save_data(mut data_rx: mpsc::UnboundedReceiver<LiveData>, live_id: LiveId
             LiveData::AuthorChatChangeSoundConfig(config) => {
                 conn.author_chat_change_sound_config(config)
             }
-            LiveData::ViolationAlert(alert) => conn.violation_alert(alert),
             LiveData::Stop => {
                 log::info!("[{}] [{}] stop saving data", live_id, liver_uid);
                 return;
@@ -272,7 +271,6 @@ impl Conn {
         self.conn.execute_batch(CREATE_AUTHOR_CHAT_END)?;
         self.conn
             .execute_batch(CREATE_AUTHOR_CHAT_CHANGE_SOUND_CONFIG)?;
-        self.conn.execute_batch(CREATE_VIOLATION_ALERT)?;
 
         Ok(())
     }
@@ -614,17 +612,6 @@ impl Conn {
                 self,
                 e
             );
-        }
-    }
-
-    fn violation_alert(&self, alert: ViolationAlert) {
-        let mut stmt = cached_stmt!(self, INSERT_VIOLATION_ALERT, "violation_alert");
-        if let Err(e) = stmt.execute(named_params! {
-            ":live_id": alert.live_id,
-            ":save_time": alert.save_time,
-            ":violation_content": alert.violation_content,
-        }) {
-            log::error!("{} failed to insert violation_alert: {}", self, e);
         }
     }
 }

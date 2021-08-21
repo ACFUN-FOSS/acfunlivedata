@@ -8,10 +8,10 @@ use acfunlivedanmaku::{
         zt_live_user_identity::ManagerType, AcFunUserInfo as ApiAcFunUserInfo,
         AcfunActionSignalJoinClub, AuthorChatPlayerInfo as ApiAuthorChatPlayerInfo,
         CommonActionSignalComment, CommonActionSignalGift, CommonActionSignalUserFollowAuthor,
-        CommonNotifySignalViolationAlert, CommonStateSignalAuthorChatCall,
-        CommonStateSignalAuthorChatChangeSoundConfig, CommonStateSignalAuthorChatEnd,
-        CommonStateSignalAuthorChatReady, CommonStateSignalChatCall, CommonStateSignalChatEnd,
-        CommonStateSignalChatReady, ImageCdnNode, ZtLiveUserIdentity, ZtLiveUserInfo,
+        CommonStateSignalAuthorChatCall, CommonStateSignalAuthorChatChangeSoundConfig,
+        CommonStateSignalAuthorChatEnd, CommonStateSignalAuthorChatReady,
+        CommonStateSignalChatCall, CommonStateSignalChatEnd, CommonStateSignalChatReady,
+        ImageCdnNode, ZtLiveUserIdentity, ZtLiveUserInfo,
     },
     danmaku::MedalInfo as ApiMedalInfo,
 };
@@ -654,24 +654,6 @@ impl AuthorChatChangeSoundConfig {
             live_id,
             save_time: unix_time(),
             sound_config_change_type: config.sound_config_change_type,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, SimpleObject)]
-pub struct ViolationAlert {
-    pub live_id: LiveId,
-    pub save_time: i64,
-    pub violation_content: String,
-}
-
-impl ViolationAlert {
-    #[inline]
-    pub fn new(live_id: LiveId, alert: CommonNotifySignalViolationAlert) -> Self {
-        Self {
-            live_id,
-            save_time: unix_time(),
-            violation_content: alert.violation_content,
         }
     }
 }

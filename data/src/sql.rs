@@ -369,14 +369,3 @@ CREATE UNIQUE INDEX IF NOT EXISTS author_chat_change_sound_config_save_time_inde
 pub const INSERT_AUTHOR_CHAT_CHANGE_SOUND_CONFIG: &str = r"INSERT INTO author_chat_change_sound_config
 (author_chat_id, live_id, save_time, sound_config_change_type)
 VALUES (:author_chat_id, :live_id, :save_time, :sound_config_change_type);";
-
-pub const CREATE_VIOLATION_ALERT: &str = r"CREATE TABLE IF NOT EXISTS violation_alert (
-live_id TEXT NOT NULL,
-save_time INTEGER NOT NULL,
-violation_content TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS violation_alert_live_id_index ON violation_alert (live_id);
-CREATE UNIQUE INDEX IF NOT EXISTS violation_alert_save_time_index ON violation_alert (save_time);";
-pub const INSERT_VIOLATION_ALERT: &str = r"INSERT INTO violation_alert
-(live_id, save_time, violation_content)
-VALUES (:live_id, :save_time, :violation_content);";

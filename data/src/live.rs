@@ -58,7 +58,6 @@ pub enum LiveData {
     AuthorChatReady(AuthorChatReady),
     AuthorChatEnd(AuthorChatEnd),
     AuthorChatChangeSoundConfig(AuthorChatChangeSoundConfig),
-    ViolationAlert(ViolationAlert),
     Stop,
 }
 
@@ -193,15 +192,9 @@ impl Liver {
                         Ok(option) => match option {
                             Some(result) => match result {
                                 Ok(msg) => match msg {
-                                    Danmaku::ActionSignal(signals) => {
-                                        self.action(signals);
-                                    }
-                                    Danmaku::StateSignal(signals) => {
-                                        self.state(signals);
-                                    }
-                                    Danmaku::NotifySignal(signals) => {
-                                        self.notify(signals);
-                                    }
+                                    Danmaku::ActionSignal(signals) => self.action(signals),
+                                    Danmaku::StateSignal(signals) => self.state(signals),
+                                    Danmaku::NotifySignal(_) => {}
                                 },
                                 Err(e) => {
                                     log::warn!("{} getting danmaku error: {}", self, e);
@@ -394,17 +387,6 @@ impl Liver {
                     ));
                 }
                 _ => {}
-            }
-        }
-    }
-
-    fn notify(&self, signals: Vec<NotifySignal>) {
-        for signal in signals {
-            if let NotifySignal::ViolationAlert(alert) = signal {
-                self.send_data_message(LiveData::ViolationAlert(ViolationAlert::new(
-                    self.live_id.clone(),
-                    alert,
-                )));
             }
         }
     }
