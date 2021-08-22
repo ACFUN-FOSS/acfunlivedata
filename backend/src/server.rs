@@ -5,7 +5,12 @@ use async_graphql::{
     EmptyMutation, EmptySubscription, Request as GraphqlRequest, Response as GraphqlResponse,
     Schema,
 };
-use axum::{http::StatusCode, prelude::*, service, AddExtensionLayer};
+use axum::{
+    http::StatusCode,
+    prelude::*,
+    service::{self, ServiceExt as AxumServiceExt},
+    AddExtensionLayer,
+};
 use std::{convert::Infallible, time::Duration};
 use tower::{
     limit::concurrency::ConcurrencyLimitLayer,
@@ -20,7 +25,6 @@ use tower_http::{
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const CONCURRENCY_LIMIT: usize = 50;
-const DOWNLOAD_LIMIT: usize = 1;
 
 type LiveSchema = Schema<QueryRoot, EmptyMutation, EmptySubscription>;
 
@@ -35,6 +39,21 @@ pub async fn graphql_server() {
                 .layer(RequireAuthorizationLayer::custom(Token))
                 .layer(AddExtensionLayer::new(schema)),
         ),
+    )
+    .route(
+        "/download",
+        service::get(Download.then(|r| async {
+            match r {
+                Ok((p, h)) => {
+                    let mut resp = ServeFile::new(p).call(()).await?;
+                    resp.headers_mut().extend(h);
+                    Ok(resp)
+                }
+                Err(e) => Err(e),
+            }
+        }))
+        .handle_error(|_| Ok::<_, Infallible>(StatusCode::INTERNAL_SERVER_ERROR))
+        .layer(RequireAuthorizationLayer::custom(Token)),
     )
     .layer(TimeoutLayer::new(REQUEST_TIMEOUT))
     .handle_error(|e: BoxError| {
@@ -56,46 +75,6 @@ pub async fn graphql_server() {
     .layer(CompressionLayer::new().gzip(true).no_deflate().no_br());
 
     axum::Server::bind(&"0.0.0.0:3000".parse().expect("failed to parse ip address"))
-        .serve(app.into_make_service())
-        .await
-        .expect("failed to serve graphql server");
-}
-
-pub async fn download_server() {
-    let app = route(
-        "/download",
-        service::get(Download.then(|r| async {
-            match r {
-                Ok((p, h)) => {
-                    let mut resp = ServeFile::new(p).call(()).await?;
-                    resp.headers_mut().extend(h);
-                    Ok(resp)
-                }
-                Err(e) => Err(e),
-            }
-        })),
-    )
-    .layer(TimeoutLayer::new(REQUEST_TIMEOUT))
-    .handle_error(|e: BoxError| {
-        if e.is::<Elapsed>() {
-            Ok::<_, Infallible>(StatusCode::REQUEST_TIMEOUT)
-        } else {
-            Ok::<_, Infallible>(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    })
-    .layer(LoadShedLayer::new())
-    .handle_error(|e: BoxError| {
-        if e.is::<Overloaded>() {
-            Ok::<_, Infallible>(StatusCode::TOO_MANY_REQUESTS)
-        } else {
-            Ok::<_, Infallible>(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    })
-    .layer(ConcurrencyLimitLayer::new(DOWNLOAD_LIMIT))
-    .layer(RequireAuthorizationLayer::custom(Token))
-    .layer(CompressionLayer::new().gzip(true).no_deflate().no_br());
-
-    axum::Server::bind(&"0.0.0.0:3001".parse().expect("failed to parse ip address"))
         .serve(app.into_make_service())
         .await
         .expect("failed to serve graphql server");

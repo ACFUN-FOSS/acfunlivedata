@@ -75,7 +75,6 @@ fn main() -> Result<()> {
             tokio::select! {
                 _ = socket::message(backend_password) => {}
                 _ = server::graphql_server() => {}
-                _ = server::download_server() => {}
             }
         });
 

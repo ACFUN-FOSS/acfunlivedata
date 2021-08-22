@@ -12,6 +12,7 @@ use axum::{
         Request,
     },
 };
+use cached::proc_macro::cached;
 use once_cell::sync::Lazy;
 use std::{
     convert::TryInto,
@@ -31,6 +32,7 @@ pub static TEMP_DIRECTORY: Lazy<PathBuf> = Lazy::new(|| {
     path
 });
 
+#[cached(size = 10, time = 10, result = true)]
 #[inline]
 async fn is_live(liver_uid: i64) -> Result<bool> {
     let api_client = build_client().await?;
