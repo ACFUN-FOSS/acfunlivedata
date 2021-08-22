@@ -1,21 +1,17 @@
 use crate::{config::LiveConfig, sqlite::save_data};
-use acfunliveapi::{
-    client::{DefaultApiClient, DefaultApiClientBuilder},
-    response::{
-        Gift as ApiGift, LiveData as ApiLiveData, Summary as ApiSummary, UserInfo, UserLiveInfo,
-    },
+use acfunliveapi::response::{
+    Gift as ApiGift, LiveData as ApiLiveData, Summary as ApiSummary, UserInfo, UserLiveInfo,
 };
 use acfunlivedanmaku::{
     acproto::{CommonStateSignalCurrentRedpackList, CommonStateSignalDisplayInfo},
     client::DanmakuClient,
     danmaku::*,
 };
-use acfunlivedata_common::{data::*, message::DataCenterMessage};
+use acfunlivedata_common::{client::build_client, data::*, message::DataCenterMessage};
 use ahash::{AHashMap, AHashSet};
 use anyhow::{Context, Result};
-use cached::proc_macro::cached;
 use futures::StreamExt;
-use once_cell::sync::{Lazy, OnceCell};
+use once_cell::sync::OnceCell;
 use std::{future::Future, sync::Arc, time::Duration};
 use tokio::{sync::mpsc, time};
 
@@ -28,10 +24,6 @@ const RETRY_INTERVAL: Duration = Duration::from_secs(2);
 const TIMEOUT: Duration = Duration::from_secs(10);
 const SUMMARY_WAIT: Duration = Duration::from_secs(10);
 const SUMMARY_INTERVAL: Duration = Duration::from_secs(1800);
-
-static API_CLIENT_BUILDER: Lazy<DefaultApiClientBuilder> = Lazy::new(|| {
-    DefaultApiClientBuilder::default_client().expect("failed to construct ApiClientBuilder")
-});
 
 type FansCount = Option<i32>;
 type MedalName = Option<String>;
@@ -79,11 +71,6 @@ pub enum LiveMessage {
 struct LiveMapData {
     title: Option<String>,
     data_tx: mpsc::UnboundedSender<LiveData>,
-}
-
-#[cached(size = 1, time = 3600, result = true)]
-async fn build_client() -> Result<DefaultApiClient> {
-    Ok(API_CLIENT_BUILDER.clone().build().await?)
 }
 
 #[inline]
@@ -158,17 +145,16 @@ impl Liver {
         let api_client = match build_client().await {
             Ok(client) => client,
             Err(e) => {
-                log::error!("{} failed to build AcFun api client: {}", self, e);
+                log::error!("{} failed to build AcFun API client: {}", self, e);
                 self.send_message(live_tx, LiveMessage::StopDanmaku(self.live_id.clone()));
                 return;
             }
         };
         // 获取直播信息
         let liver = self.clone();
-        let api_client_ = api_client.clone();
         let _ = tokio::spawn(async move {
             run_thrice("live_info()", || {
-                liver.live_info(&api_client_, live_data.clone(), liver_info.clone())
+                liver.live_info(live_data.clone(), liver_info.clone())
             })
             .await;
         });
@@ -221,18 +207,13 @@ impl Liver {
         // 获取直播总结
         let liver = self.clone();
         let _ = tokio::spawn(async move {
-            let api_client = api_client;
-            run_thrice("summary()", || liver.summary(&api_client)).await;
+            run_thrice("summary()", || liver.summary()).await;
         });
         self.send_message(live_tx, LiveMessage::StopDanmaku(self.live_id.clone()));
     }
 
-    async fn live_info(
-        &self,
-        api_client: &DefaultApiClient,
-        live_data: ApiLiveData,
-        liver_info: UserInfo,
-    ) -> Result<()> {
+    async fn live_info(&self, live_data: ApiLiveData, liver_info: UserInfo) -> Result<()> {
+        let api_client = build_client().await?;
         let mut medal_name = None;
         let mut medal_count = None;
         // 获取主播的守护徽章信息
@@ -259,7 +240,8 @@ impl Liver {
         Ok(())
     }
 
-    async fn summary(&self, api_client: &DefaultApiClient) -> Result<()> {
+    async fn summary(&self) -> Result<()> {
+        let api_client = build_client().await?;
         // 获取直播总结
         let summary = api_client
             .get_summary(&*self.live_id)
@@ -399,13 +381,19 @@ impl std::fmt::Display for Liver {
 }
 
 pub async fn all_lives() {
-    let api_client = build_client().await.expect("failed to build api client");
     let live_tx = LIVE_TX.get().expect("failed to get LIVE_TX");
     let mut interval = time::interval(LIVE_LIST_INTERVAL);
 
     loop {
         // 定时获取直播间列表
         let _ = interval.tick().await;
+        let api_client = match build_client().await {
+            Ok(client) => client,
+            Err(e) => {
+                log::error!("failed to build AcFun API client: {}", e);
+                continue;
+            }
+        };
         match api_client.get_live_list(1_000_000, 0).await {
             Ok(list) => {
                 if let Err(e) = live_tx.send(LiveMessage::LiveList(list.live_list)) {

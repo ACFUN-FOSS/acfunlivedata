@@ -10,6 +10,7 @@ anyhow = "1.0.43"
 asynchronous-codec = "0.6.0"
 async-graphql = "2.9.10"
 bincode = "1.3.3"
+cached = "0.25.0"
 chrono = { version = "0.4.19", default-features = false, features = ["clock"] }
 encon = "0.0.3"
 futures = "0.3.16"

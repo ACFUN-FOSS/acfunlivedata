@@ -39,7 +39,7 @@ impl AuthorizeRequest for Token {
     #[inline]
     fn unauthorized_response<B>(&mut self, _request: &Request<B>) -> Response<Self::ResponseBody> {
         Response::builder()
-            .status(StatusCode::UNAUTHORIZED)
+            .status(StatusCode::FORBIDDEN)
             .body(box_body(Body::empty()))
             .expect("failed to build Response")
     }

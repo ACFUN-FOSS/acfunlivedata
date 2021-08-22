@@ -1,36 +1,32 @@
 mod auth;
 mod config;
-mod graphql;
+mod download;
 mod model;
 mod pool;
+mod server;
 mod socket;
 mod sql;
 mod sqlite;
 
 use acfunlivedata_common::{
     config::Config as CommonConfig,
+    create_dir,
     message::{MessageSocket, DATA_CENTER_SOCKET},
 };
 use anyhow::{bail, Result};
-use axum::{prelude::*, AddExtensionLayer};
 use rpassword::read_password_from_tty;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use tokio::sync::Mutex;
-use tower::{limit::concurrency::ConcurrencyLimitLayer, timeout::TimeoutLayer};
-use tower_http::{
-    auth::require_authorization::RequireAuthorizationLayer, compression::CompressionLayer,
-};
 
 const WORKER_THREAD_NUM: usize = 10;
 const MAX_BLOCKING_THREAD: usize = 2048;
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
-const CONCURRENCY_LIMIT: usize = 50;
 
 fn main() -> Result<()> {
     env_logger::builder()
         .filter(Some("acfunliveapi"), log::LevelFilter::Trace)
         .filter(Some("acfunlivedata_common"), log::LevelFilter::Trace)
         .filter(Some("acfunlivedata_backend"), log::LevelFilter::Trace)
+        .filter(Some("async-graphql"), log::LevelFilter::Trace)
         .init();
 
     let data_password = read_password_from_tty(Some("data center password: "))?;
@@ -48,19 +44,6 @@ fn main() -> Result<()> {
     if backend_password.is_empty() {
         bail!("password is empty");
     }
-
-    let schema = graphql::schema();
-    //println!("{}", schema.sdl());
-
-    let app = route(
-        "/",
-        get(graphql::graphql_playground)
-            .post(graphql::graphql_handler.layer(RequireAuthorizationLayer::custom(auth::Token))),
-    )
-    .layer(ConcurrencyLimitLayer::new(CONCURRENCY_LIMIT))
-    .layer(TimeoutLayer::new(REQUEST_TIMEOUT))
-    .layer(AddExtensionLayer::new(schema))
-    .layer(CompressionLayer::new().gzip(true).no_deflate().no_br());
 
     tokio::runtime::Builder::new_multi_thread()
         .worker_threads(WORKER_THREAD_NUM)
@@ -85,16 +68,14 @@ fn main() -> Result<()> {
                 panic!("failed to set CONFIG");
             };
 
-            let serve = async {
-                axum::Server::bind(&"0.0.0.0:3000".parse().expect("failed to parse ip address"))
-                    .serve(app.into_make_service())
-                    .await
-                    .expect("failed to serve")
-            };
+            create_dir(&*download::TEMP_DIRECTORY)
+                .await
+                .expect("failed to create temp directory");
 
             tokio::select! {
                 _ = socket::message(backend_password) => {}
-                _ = serve => {}
+                _ = server::graphql_server() => {}
+                _ = server::download_server() => {}
             }
         });
 
