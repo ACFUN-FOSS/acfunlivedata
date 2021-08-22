@@ -23,8 +23,11 @@ use tower_http::{
     services::fs::ServeFile,
 };
 
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 const CONCURRENCY_LIMIT: usize = 50;
+const HTTP2_KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(20);
+const HTTP2_KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(10);
+const TCP_KEEPALIVE: Duration = Duration::from_secs(30);
 
 type LiveSchema = Schema<QueryRoot, EmptyMutation, EmptySubscription>;
 
@@ -74,10 +77,14 @@ pub async fn graphql_server() {
     .layer(ConcurrencyLimitLayer::new(CONCURRENCY_LIMIT))
     .layer(CompressionLayer::new().gzip(true).no_deflate().no_br());
 
-    axum::Server::bind(&"0.0.0.0:3000".parse().expect("failed to parse ip address"))
+    hyper::Server::bind(&"0.0.0.0:3000".parse().expect("failed to parse ip address"))
+        .http1_keepalive(true)
+        .http2_keep_alive_interval(HTTP2_KEEP_ALIVE_INTERVAL)
+        .http2_keep_alive_timeout(HTTP2_KEEP_ALIVE_TIMEOUT)
+        .tcp_keepalive(Some(TCP_KEEPALIVE))
         .serve(app.into_make_service())
         .await
-        .expect("failed to serve graphql server");
+        .expect("failed to serve server");
 }
 
 #[inline]

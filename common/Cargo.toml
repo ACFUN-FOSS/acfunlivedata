@@ -8,7 +8,7 @@ acfunliveapi = { version = "0.1.0", git = "https://github.com/orzogc/acfunliveap
 acfunlivedanmaku = { version = "0.1.0", git = "https://github.com/orzogc/acfunliveapi", branch = "main" }
 anyhow = "1.0.43"
 asynchronous-codec = "0.6.0"
-async-graphql = "2.9.10"
+async-graphql = "2.9.11"
 bincode = "1.3.3"
 cached = "0.25.0"
 chrono = { version = "0.4.19", default-features = false, features = ["clock"] }
@@ -18,7 +18,7 @@ highway = "0.6.4"
 interprocess = { version = "1.1.1", default-features = false, features = ["nonblocking"] }
 log = "0.4.14"
 once_cell = "1.8.0"
-serde = { version = "1.0.127", features = ["derive", "rc"] }
+serde = { version = "1.0.128", features = ["derive", "rc"] }
 serde_json = "1.0.66"
 tokio = { version = "1.10.0", features = ["fs", "time"] }
 
