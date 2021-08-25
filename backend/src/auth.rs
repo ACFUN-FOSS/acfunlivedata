@@ -37,7 +37,16 @@ impl AuthorizeRequest for Token {
     }
 
     #[inline]
-    fn unauthorized_response<B>(&mut self, _request: &Request<B>) -> Response<Self::ResponseBody> {
+    fn unauthorized_response<B>(&mut self, request: &Request<B>) -> Response<Self::ResponseBody> {
+        log::warn!(
+            "failed to authorize, token: {:?}",
+            request
+                .headers()
+                .get_all(AUTH_HEADER)
+                .iter()
+                .map(|v| v.to_str())
+                .collect::<Vec<_>>()
+        );
         Response::builder()
             .status(StatusCode::FORBIDDEN)
             .body(box_body(Body::empty()))

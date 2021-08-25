@@ -6,10 +6,8 @@ use async_graphql::{
     Schema,
 };
 use axum::{
-    http::StatusCode,
-    prelude::*,
-    service::{self, ServiceExt as AxumServiceExt},
-    AddExtensionLayer,
+    extract, handler::get, handler::Handler, http::StatusCode, response, service,
+    AddExtensionLayer, Router,
 };
 use std::{convert::Infallible, time::Duration};
 use tower::{
@@ -35,47 +33,52 @@ pub async fn graphql_server() {
     let schema = schema();
     //println!("{}", schema.sdl());
 
-    let app = route(
-        "/",
-        get(graphql_playground).post(
-            graphql_handler
-                .layer(RequireAuthorizationLayer::custom(Token))
-                .layer(AddExtensionLayer::new(schema)),
-        ),
-    )
-    .route(
-        "/download",
-        service::get(Download.then(|r| async {
-            match r {
-                Ok((p, h)) => {
-                    let mut resp = ServeFile::new(p).call(()).await?;
-                    resp.headers_mut().extend(h);
-                    Ok(resp)
-                }
-                Err(e) => Err(e),
+    let app = Router::new()
+        .route(
+            "/",
+            get(graphql_playground).post(
+                graphql_handler
+                    .layer(RequireAuthorizationLayer::custom(Token))
+                    .layer(AddExtensionLayer::new(schema)),
+            ),
+        )
+        .or(Router::new()
+            .route(
+                "/download",
+                service::get(Download.then(|r| async {
+                    match r {
+                        Ok((p, h)) => {
+                            let mut resp = ServeFile::new(p).call(()).await?;
+                            resp.headers_mut().extend(h);
+                            Ok(resp)
+                        }
+                        Err(e) => {
+                            log::error!("failed to prepare downloading database: {}", e);
+                            Err(e)
+                        }
+                    }
+                }))
+                .handle_error(|_| Ok::<_, Infallible>(StatusCode::INTERNAL_SERVER_ERROR)),
+            )
+            .layer(RequireAuthorizationLayer::custom(Token)))
+        .layer(TimeoutLayer::new(REQUEST_TIMEOUT))
+        .handle_error(|e: BoxError| {
+            if e.is::<Elapsed>() {
+                Ok::<_, Infallible>(StatusCode::REQUEST_TIMEOUT)
+            } else {
+                Ok::<_, Infallible>(StatusCode::INTERNAL_SERVER_ERROR)
             }
-        }))
-        .handle_error(|_| Ok::<_, Infallible>(StatusCode::INTERNAL_SERVER_ERROR))
-        .layer(RequireAuthorizationLayer::custom(Token)),
-    )
-    .layer(TimeoutLayer::new(REQUEST_TIMEOUT))
-    .handle_error(|e: BoxError| {
-        if e.is::<Elapsed>() {
-            Ok::<_, Infallible>(StatusCode::REQUEST_TIMEOUT)
-        } else {
-            Ok::<_, Infallible>(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    })
-    .layer(LoadShedLayer::new())
-    .handle_error(|e: BoxError| {
-        if e.is::<Overloaded>() {
-            Ok::<_, Infallible>(StatusCode::TOO_MANY_REQUESTS)
-        } else {
-            Ok::<_, Infallible>(StatusCode::INTERNAL_SERVER_ERROR)
-        }
-    })
-    .layer(ConcurrencyLimitLayer::new(CONCURRENCY_LIMIT))
-    .layer(CompressionLayer::new().gzip(true).no_deflate().no_br());
+        })
+        .layer(LoadShedLayer::new())
+        .handle_error(|e: BoxError| {
+            if e.is::<Overloaded>() {
+                Ok::<_, Infallible>(StatusCode::TOO_MANY_REQUESTS)
+            } else {
+                Ok::<_, Infallible>(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        })
+        .layer(ConcurrencyLimitLayer::new(CONCURRENCY_LIMIT))
+        .layer(CompressionLayer::new().gzip(true).no_deflate().no_br());
 
     hyper::Server::bind(&"0.0.0.0:3000".parse().expect("failed to parse ip address"))
         .http1_keepalive(true)

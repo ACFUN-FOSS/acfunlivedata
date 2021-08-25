@@ -85,6 +85,7 @@ impl Service<Request<Body>> for Download {
                 Some(User::Admin) => bail!("this is an admin token"),
                 None => panic!("no User in Request extensions"),
             };
+            log::info!("[{}] start preparing downloading database", liver_uid);
             if is_live(liver_uid).await? {
                 bail!("liver {} is living", liver_uid);
             }

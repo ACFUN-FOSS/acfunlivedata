@@ -112,7 +112,10 @@ impl Config {
             let mut exist = false;
             if self.contains_uid(liver_uid) {
                 exist = true;
-                log::warn!("already added liver {} before", liver_uid);
+                log::warn!(
+                    "already added liver {} before, generating new token",
+                    liver_uid
+                );
                 self.users.retain(|_, i| !i.is_liver(liver_uid));
                 if tool {
                     send_tool_message(&ToolMessage::BackendAddLiver(

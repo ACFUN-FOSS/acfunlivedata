@@ -218,9 +218,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql"
-version = "2.9.11"
+version = "2.9.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd01c0db7222d80d1742e1084fdb15d7665c83ab43505862f56890e5d2e130b7"
+checksum = "b2bfd8048bc1adab507286ac3583ed3426b56af91b535d55d7980ef4369ef736"
 dependencies = [
  "async-graphql-derive",
  "async-graphql-parser",
@@ -246,9 +246,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-derive"
-version = "2.9.11"
+version = "2.9.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "555a659c13e7bd8da56b5bbc09489ad820b296b3a270683594951faac0552bd1"
+checksum = "e6c80f5c2b89adce7124efbded08385ff3a545d6453055073610424bd149ba8f"
 dependencies = [
  "Inflector",
  "async-graphql-parser",
@@ -262,9 +262,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-parser"
-version = "2.9.11"
+version = "2.9.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c33ae38de0db40e33c50ae9c78b2c657e767ee87b35725802ef93df384225238"
+checksum = "3d6dc0d3ffd4c27038d1c82bd9da713b04e8963232849da3158c0c76cd27c7b0"
 dependencies = [
  "async-graphql-value",
  "pest",
@@ -275,9 +275,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-value"
-version = "2.9.11"
+version = "2.9.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fab1f61087c23afbc39595f19136c184a9e4fc5aa0a1c6b92a08fd42d7b6b65"
+checksum = "6c4fbe60f95c61e7030dd6500b5076cf8b0feee84a73ee3d774b06dab67ed122"
 dependencies = [
  "bytes",
  "serde",
@@ -396,11 +396,12 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
 name = "axum"
-version = "0.1.3"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a3c42001f1f8dd44673da8e05d4015a8e0ed7a4712309c7ae47d8573cbac0db"
+checksum = "8057b0a4ea316fc0ad3bd48706f2b89076e45a70b9f7b3a4e740e5ec52078ea2"
 dependencies = [
  "async-trait",
+ "bitflags",
  "bytes",
  "futures-util",
  "http",
@@ -411,10 +412,13 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "sync_wrapper",
  "tokio",
  "tokio-util",
  "tower",
  "tower-http",
+ "tower-layer",
+ "tower-service",
 ]
 
 [[package]]
@@ -1151,9 +1155,9 @@ checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
-version = "0.14.11"
+version = "0.14.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b61cf2d1aebcf6e6352c97b81dc2244ca29194be1b276f5d8ad5c6330fffb11"
+checksum = "13f67199e765030fa08fe0bd581af683f0d5bc04ea09c2b1102012c5fb90e7fd"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -2041,9 +2045,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.128"
+version = "1.0.129"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1056a0db1978e9dbf0f6e4fca677f6f9143dc1c19de346f22cac23e422196834"
+checksum = "d1f72836d2aa753853178eda473a3b9d8e4eefdaf20523b919677e6de489f8f1"
 dependencies = [
  "serde_derive",
 ]
@@ -2059,9 +2063,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.128"
+version = "1.0.129"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13af2fbb8b60a8950d6c72a56d2095c28870367cc8e10c55e9745bac4995a2c4"
+checksum = "e57ae87ad533d9a56427558b516d0adac283614e347abf85b0dc0cbbf0a249f3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2292,6 +2296,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync_wrapper"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20518fe4a4c9acf048008599e464deb21beeae3d3578418951a189c235a7a9a8"
+
+[[package]]
 name = "tempfile"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2398,9 +2408,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.10.0"
+version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01cf844b23c6131f624accf65ce0e4e9956a8bb329400ea5bcc26ae3a5c20b0b"
+checksum = "92036be488bb6594459f2e03b60e42df6f937fe6ca5c5ffdcb539c6b84dc40f5"
 dependencies = [
  "autocfg",
  "bytes",
