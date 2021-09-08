@@ -24,7 +24,7 @@ pub async fn message(password: String) {
     loop {
         if let Err(e) = server
             .listen(|m| async move {
-                let mut config = CONFIG.get().expect("failed to get CONFIG").lock().await;
+                let mut config = CONFIG.get().expect("failed to get CONFIG").write().await;
                 match m {
                     BackendMessage::AddLiver(liver_uid) => {
                         if let Err(e) = config.add_liver(liver_uid, true).await {

@@ -31,7 +31,7 @@ impl AuthorizeRequest for Token {
         }
 
         let config =
-            futures::executor::block_on(CONFIG.get().expect("failed to get CONFIG").lock());
+            futures::executor::block_on(CONFIG.get().expect("failed to get CONFIG").read());
 
         config.get(token)
     }

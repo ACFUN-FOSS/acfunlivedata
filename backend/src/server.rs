@@ -23,8 +23,8 @@ use tower_http::{
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 const CONCURRENCY_LIMIT: usize = 50;
-const HTTP2_KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(20);
-const HTTP2_KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(10);
+const HTTP2_KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(10);
+const HTTP2_KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(20);
 const TCP_KEEPALIVE: Duration = Duration::from_secs(30);
 
 type LiveSchema = Schema<QueryRoot, EmptyMutation, EmptySubscription>;
@@ -63,6 +63,7 @@ pub async fn graphql_server() {
             .layer(RequireAuthorizationLayer::custom(Token)))
         .layer(TimeoutLayer::new(REQUEST_TIMEOUT))
         .handle_error(|e: BoxError| {
+            log::warn!("server receiving a request from client is timeout");
             if e.is::<Elapsed>() {
                 Ok::<_, Infallible>(StatusCode::REQUEST_TIMEOUT)
             } else {
@@ -71,6 +72,7 @@ pub async fn graphql_server() {
         })
         .layer(LoadShedLayer::new())
         .handle_error(|e: BoxError| {
+            log::warn!("server is overloaded");
             if e.is::<Overloaded>() {
                 Ok::<_, Infallible>(StatusCode::TOO_MANY_REQUESTS)
             } else {
@@ -80,7 +82,7 @@ pub async fn graphql_server() {
         .layer(ConcurrencyLimitLayer::new(CONCURRENCY_LIMIT))
         .layer(CompressionLayer::new().gzip(true).no_deflate().no_br());
 
-    hyper::Server::bind(&"0.0.0.0:3000".parse().expect("failed to parse ip address"))
+    hyper::Server::bind(&"0.0.0.0:3456".parse().expect("failed to parse ip address"))
         .http1_keepalive(true)
         .http2_keep_alive_interval(HTTP2_KEEP_ALIVE_INTERVAL)
         .http2_keep_alive_timeout(HTTP2_KEEP_ALIVE_TIMEOUT)

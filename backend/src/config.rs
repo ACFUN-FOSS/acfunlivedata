@@ -10,11 +10,8 @@ use async_graphql::SimpleObject;
 use once_cell::sync::{Lazy, OnceCell};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use serde::{Deserialize, Serialize};
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-use tokio::sync::Mutex;
+use std::path::{Path, PathBuf};
+use tokio::sync::RwLock;
 
 pub const TOKEN_LENGTH: usize = 32;
 
@@ -26,7 +23,7 @@ pub static CONFIG_FILE_PATH: Lazy<PathBuf> = Lazy::new(|| {
     path
 });
 
-pub static CONFIG: OnceCell<Arc<Mutex<LiveConfig>>> = OnceCell::new();
+pub static CONFIG: OnceCell<RwLock<LiveConfig>> = OnceCell::new();
 
 pub type LiveConfig = CommonConfig<Config, &'static Path>;
 

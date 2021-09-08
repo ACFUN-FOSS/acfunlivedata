@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 mod auth;
 mod config;
 mod download;
@@ -15,8 +17,7 @@ use acfunlivedata_common::{
 };
 use anyhow::{bail, Result};
 use rpassword::read_password_from_tty;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 const WORKER_THREAD_NUM: usize = 10;
 const MAX_BLOCKING_THREAD: usize = 2048;
@@ -64,7 +65,7 @@ fn main() -> Result<()> {
                 config.set_admin_token(token);
                 config.save_config().await.expect("failed to save config");
             }
-            if config::CONFIG.set(Arc::new(Mutex::new(config))).is_err() {
+            if config::CONFIG.set(RwLock::new(config)).is_err() {
                 panic!("failed to set CONFIG");
             };
 

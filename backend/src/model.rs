@@ -8,8 +8,8 @@ use acfunlivedata_common::{data::*, database::*};
 use ahash::AHashMap;
 use anyhow::{bail, Result};
 use async_graphql::{
-    validators::{IntGreaterThan, ListMinLength, StringMinLength},
-    Context, Object,
+    validators::{InputValueValidator, IntGreaterThan},
+    Context, Object, Value,
 };
 use cached::proc_macro::cached;
 use rusqlite::ToSql;
@@ -77,6 +77,84 @@ macro_rules! get_pool {
     }};
 }
 
+#[derive(Clone, Copy, Debug)]
+struct ListStringMinLength {
+    length: i32,
+}
+
+impl InputValueValidator for ListStringMinLength {
+    fn is_valid(&self, value: &Value) -> Result<(), String> {
+        match value {
+            Value::String(s) => {
+                if s.len() < self.length as usize {
+                    Err(format!(
+                        "the string length is {}, must be greater than or equal to {}",
+                        s.len(),
+                        self.length
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
+            Value::List(values) => {
+                if values.iter().any(|v| {
+                    if let Value::String(s) = v {
+                        s.len() < self.length as usize
+                    } else {
+                        false
+                    }
+                }) {
+                    Err(format!(
+                        "the string length must be greater than or equal to {}",
+                        self.length
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ListIntGreaterThan {
+    value: i64,
+}
+
+impl InputValueValidator for ListIntGreaterThan {
+    fn is_valid(&self, value: &Value) -> Result<(), String> {
+        match value {
+            Value::Number(n) => {
+                if let Some(n) = n.as_i64() {
+                    if n <= self.value {
+                        return Err(format!(
+                            "the value is {}, must be greater than {}",
+                            n, self.value
+                        ));
+                    }
+                }
+                Ok(())
+            }
+            Value::List(values) => {
+                if values.iter().any(|v| {
+                    if let Value::Number(n) = v {
+                        if let Some(n) = n.as_i64() {
+                            return n <= self.value;
+                        }
+                    }
+                    false
+                }) {
+                    Err(format!("the value must be greater than {}", self.value))
+                } else {
+                    Ok(())
+                }
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
 #[Object]
 impl QueryRoot {
     #[graphql(visible = false)]
@@ -88,7 +166,7 @@ impl QueryRoot {
         if !ctx.data_unchecked::<User>().is_admin() {
             bail!("the admin authorization is needed");
         }
-        let mut config = CONFIG.get().expect("failed to get CONFIG").lock().await;
+        let mut config = CONFIG.get().expect("failed to get CONFIG").write().await;
         let token = config.add_liver(liver_uid, false).await?;
         config.save_config().await?;
 
@@ -104,7 +182,7 @@ impl QueryRoot {
         if !ctx.data_unchecked::<User>().is_admin() {
             bail!("the admin authorization is needed");
         }
-        let mut config = CONFIG.get().expect("failed to get CONFIG").lock().await;
+        let mut config = CONFIG.get().expect("failed to get CONFIG").write().await;
         let token = config.delete_liver(liver_uid, false).await?;
         config.save_config().await?;
 
@@ -123,12 +201,10 @@ impl QueryRoot {
     async fn live(
         &self,
         ctx: &Context<'_>,
-        #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
-        live_id: Option<Vec<String>>,
-        #[graphql(validator(and(ListMinLength(length = "1"), IntGreaterThan(value = "0"))))]
-        liver_uid: Option<Vec<i64>>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
+        #[graphql(validator(ListStringMinLength(length = "1")))] live_id: Option<Vec<String>>,
+        #[graphql(validator(ListIntGreaterThan(value = "0")))] liver_uid: Option<Vec<i64>>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] start: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] end: Option<i64>,
     ) -> Result<Vec<Live>> {
         if !ctx.data_unchecked::<User>().is_admin() {
             bail!("the admin authorization is needed");
@@ -184,8 +260,7 @@ impl QueryRoot {
     #[inline]
     async fn gift_info(
         &self,
-        #[graphql(validator(and(ListMinLength(length = "1"), IntGreaterThan(value = "0"))))]
-        gift_id: Option<Vec<i64>>,
+        #[graphql(validator(ListIntGreaterThan(value = "0")))] gift_id: Option<Vec<i64>>,
         #[graphql(visible = false)] all_history: Option<bool>,
     ) -> Result<Vec<GiftInfo>> {
         let gift_id = gift_id.map(|mut v| {
@@ -200,10 +275,9 @@ impl QueryRoot {
     async fn live_info(
         &self,
         ctx: &Context<'_>,
-        #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
-        live_id: Option<Vec<String>>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
+        #[graphql(validator(ListStringMinLength(length = "1")))] live_id: Option<Vec<String>>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] start: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<LiveInfo>> {
         let pool = get_pool!(ctx, liver_uid);
@@ -275,10 +349,9 @@ impl QueryRoot {
     async fn title(
         &self,
         ctx: &Context<'_>,
-        #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
-        live_id: Option<Vec<String>>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
+        #[graphql(validator(ListStringMinLength(length = "1")))] live_id: Option<Vec<String>>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] start: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<Title>> {
         let pool = get_pool!(ctx, liver_uid);
@@ -301,10 +374,9 @@ impl QueryRoot {
     async fn liver_info(
         &self,
         ctx: &Context<'_>,
-        #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
-        live_id: Option<Vec<String>>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
+        #[graphql(validator(ListStringMinLength(length = "1")))] live_id: Option<Vec<String>>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] start: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<LiverInfo>> {
         let pool = get_pool!(ctx, liver_uid);
@@ -327,10 +399,9 @@ impl QueryRoot {
     async fn summary(
         &self,
         ctx: &Context<'_>,
-        #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
-        live_id: Option<Vec<String>>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
+        #[graphql(validator(ListStringMinLength(length = "1")))] live_id: Option<Vec<String>>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] start: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<Summary>> {
         let pool = get_pool!(ctx, liver_uid);
@@ -354,12 +425,10 @@ impl QueryRoot {
     async fn comment(
         &self,
         ctx: &Context<'_>,
-        #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
-        live_id: Option<Vec<String>>,
-        #[graphql(validator(and(ListMinLength(length = "1"), IntGreaterThan(value = "0"))))]
-        user_id: Option<Vec<i64>>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
+        #[graphql(validator(ListStringMinLength(length = "1")))] live_id: Option<Vec<String>>,
+        #[graphql(validator(ListIntGreaterThan(value = "0")))] user_id: Option<Vec<i64>>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] start: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<Comment>> {
         let pool = get_pool!(ctx, liver_uid);
@@ -413,10 +482,9 @@ impl QueryRoot {
     async fn follow(
         &self,
         ctx: &Context<'_>,
-        #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
-        live_id: Option<Vec<String>>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
+        #[graphql(validator(ListStringMinLength(length = "1")))] live_id: Option<Vec<String>>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] start: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<Follow>> {
         let pool = get_pool!(ctx, liver_uid);
@@ -469,14 +537,11 @@ impl QueryRoot {
     async fn gift(
         &self,
         ctx: &Context<'_>,
-        #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
-        live_id: Option<Vec<String>>,
-        #[graphql(validator(and(ListMinLength(length = "1"), IntGreaterThan(value = "0"))))]
-        user_id: Option<Vec<i64>>,
-        #[graphql(validator(and(ListMinLength(length = "1"), IntGreaterThan(value = "0"))))]
-        gift_id: Option<Vec<i64>>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
+        #[graphql(validator(ListStringMinLength(length = "1")))] live_id: Option<Vec<String>>,
+        #[graphql(validator(ListIntGreaterThan(value = "0")))] user_id: Option<Vec<i64>>,
+        #[graphql(validator(ListIntGreaterThan(value = "0")))] gift_id: Option<Vec<i64>>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] start: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<Gift>> {
         let pool = get_pool!(ctx, liver_uid);
@@ -538,10 +603,9 @@ impl QueryRoot {
     async fn join_club(
         &self,
         ctx: &Context<'_>,
-        #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
-        live_id: Option<Vec<String>>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
+        #[graphql(validator(ListStringMinLength(length = "1")))] live_id: Option<Vec<String>>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] start: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<JoinClub>> {
         let pool = get_pool!(ctx, liver_uid);
@@ -590,10 +654,9 @@ impl QueryRoot {
     async fn watching_count(
         &self,
         ctx: &Context<'_>,
-        #[graphql(validator(and(ListMinLength(length = "1"), StringMinLength(length = "1"))))]
-        live_id: Option<Vec<String>>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] start: Option<i64>,
-        #[graphql(validator(IntGreaterThan(value = "0")))] end: Option<i64>,
+        #[graphql(validator(ListStringMinLength(length = "1")))] live_id: Option<Vec<String>>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] start: Option<i64>,
+        #[graphql(validator(IntGreaterThan(value = "-1")))] end: Option<i64>,
         #[graphql(validator(IntGreaterThan(value = "0")), visible = false)] liver_uid: Option<i64>,
     ) -> Result<Vec<WatchingCount>> {
         let pool = get_pool!(ctx, liver_uid);
@@ -625,7 +688,7 @@ impl QueryRoot {
     }
 }
 
-#[cached(size = 100, time = 1800, result = true)]
+#[cached(size = 20, time = 1800, result = true)]
 async fn cache_gift_info(
     gift_id: Option<Vec<i64>>,
     all_history: Option<bool>,

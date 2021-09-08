@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use acfunlivedata_common::message::{
     BackendMessage, DataCenterMessage, MessageSocket, ToolMessage, BACKEND_SOCKET,
     DATA_CENTER_SOCKET, TOOL_PASSWORD, TOOL_SOCKET,
